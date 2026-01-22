@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Редактор графов</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: #f0f0f0;
+        }
+        
+        #canvas {
+            background: white;
+            border: 2px solid #333;
+            border-radius: 5px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            cursor: crosshair;
+        }
+        
+        .controls {
+            margin: 20px 0;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            width: 800px;
+            max-width: 100%;
+        }
+        
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            background: #4CAF50;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+        
+        button:hover {
+            background: #45a049;
+        }
+        
+        button.active {
+            background: #2196F3;
+        }
+        
+        #status {
+            margin-top: 10px;
+            padding: 10px;
+            background: #e3f2fd;
+            border-radius: 4px;
+            border-left: 4px solid #2196F3;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .instructions {
+            color: #666;
+            margin-bottom: 20px;
+            text-align: center;
+            max-width: 800px;
+            line-height: 1.5;
+        }
+
+        #debug {
+            height: 100px;
+            width:  800px;
+            font-family: monospace;
+            font-size: 12px;
+            padding: 10px;
+            border: 1px solid #333;
+            white-space: pre;
+            resize: none;
+            /* overflow-y: auto; */
+        }
+    </style>
+</head>
+<body>
+    <h1>Редактор графов</h1>
+    
+    <div class="instructions">
+        <strong>Инструкция:</strong> 
+        • Клик - добавить вершину • 
+        <span style="color:#4CAF50">Зелёная вершина</span> - выбрана • 
+        <span style="color:#FF5722">Красная вершина</span> - перемещение • 
+        Зажмите и перетащите вершину • 
+        SHIFT+Клик на две вершины - создать ребро
+    </div>
+
+    <!-- <div id="container"> -->
+    <canvas id="canvas" width="800" height="500"></canvas>
+    
+    <textarea id="debug" readonly></textarea>
+    <!-- </div> -->
+
+    <div class="controls">
+        <button id="addVertexBtn" class="active">Добавить вершину</button>
+        <button id="addEdgeBtn">Добавить ребро</button>
+        <button id="deleteBtn">Удалить</button>
+        <button id="clearBtn">Очистить всё</button>
+        
+        <div id="status">
+            Режим: <strong>Добавление вершин</strong> | Вершин: <span id="vertexCount">0</span> | 
+            Рёбер: <span id="edgeCount">0</span> | SHIFT для выбора двух вершин
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
