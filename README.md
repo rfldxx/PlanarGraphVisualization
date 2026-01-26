@@ -1,4 +1,11 @@
-Ход работы: \
+### Мечты
+* https://www1.pub.informatik.uni-wuerzburg.de/demos/forceDirected.html
+* https://www.youtube.com/playlist?list=PLubYOWSl9mIvoXDwf_Wqcrvlg15N_AWQE
+
+### WASM
+Все коммуникации ведуться через $\text{int}$, $\text{vector\<int\>}$ и $\text{vector\<double\>}$. (мне лень было мучаться искать как передавать классы/структуры...) 
+
+### Ход работы:
 (ахахахахаххахахахахахахах, хпахпахпхаппха, спасибо продуктивному дню писания к первому дедлайну... а сейчас остается только возводить готический собор и молиться на него)
 
 Что изучено:
