@@ -1,6 +1,7 @@
 #include <set>
 #include <vector>
 #include <random>
+#include <array>
 using namespace std;
 
 
@@ -146,7 +147,7 @@ vector<pair<int, int>> bfs_reordering(vector<int> u_start) {
     vector<pair<int, int>> xy(N);
     int step = chet[0] + chet[1];
     for(int y = 0; y < h; y++) {
-        int x = (maxl - layers[y].size()) / step;
+        int x = (maxl - layers[y].size()) / (3 - step);
         for(auto i : layers[y]) {
             xy[i] = {x, y};
             x += step;
@@ -157,6 +158,61 @@ vector<pair<int, int>> bfs_reordering(vector<int> u_start) {
 }
 
 
+
+
+// СИЛОВОЙ АЛГОРИТМ
+vector<array<double, 2>> rxy;
+vector<array<double, 2>> forces;
+void load_real_cords(vector<double> xy) {
+    rxy.resize(N);
+    forces.resize(N);
+    for(int i = 0; i < N; i++) {
+        for(int t : {0, 1}) rxy[i][t]  = xy[2*i+t];
+    }
+}
+
+
+void one_iteration() {
+    for(int i = 0; i < N; i++) forces[i][0] = forces[i][1] = 0;
+
+    // парные силы
+    for(int i = 0; i < N; i++) {
+        for(int j = i+1; j < N; j++) {
+            double dx = rxy[i][0] - rxy[j][0], dy = rxy[i][1] - rxy[j][1];
+            double l2 = dx*dx + dy*dy;
+            
+            forces[i][0] += +100*dx/l2;
+            forces[i][1] += +100*dy/l2;
+            
+            forces[j][0] += -100*dx/l2;
+            forces[j][1] += -100*dy/l2;
+        }
+    }
+
+    // силы по ребрам
+    for(int i = 0; i < N; i++) {
+        for(auto j : adj[i]) if( j > i ) {
+            double dx = rxy[i][0] - rxy[j][0], dy = rxy[i][1] - rxy[j][1];
+            double l2 = dx*dx + dy*dy;
+            
+            forces[i][0] += -dx/l2;
+            forces[i][1] += -dy/l2;
+            
+            forces[j][0] += +dx/l2;
+            forces[j][1] += +dy/l2;
+        }
+    }
+
+    // смещение
+    double max_f = 0;
+    for(int i = 0; i < N; i++) max_f = max( {max_f, forces[i][0], forces[i][1]} );
+
+    // хотим чтобы max_f < 10
+    double scaling = (/*max_f > 10000 ||*/ max_f < 20) ? 1./max_f : 1.;
+    for(int i = 0; i < N; i++) {
+        for(int t : {0, 1}) rxy[i][t]  += scaling*forces[i][t];
+    }
+}
 
 
 
@@ -173,7 +229,19 @@ vector<int> js_get_edges() {
     return edges;
 }
 
-vector<int> jser(vector<pair<int, int>> ab) {
+// эхх,  нельзя у pair вызывать for(auto e : pair)
+// template<typename R, template Cont>
+// vector<R> jser(vector<Cont> ab) {
+//     vector<R> r(2*ab.size());
+//     for(int i = 0; auto [a, b] : ab) {
+//         r[i++] = a;
+//         r[i++] = b;
+//     }
+//     return r;
+// }
+
+
+vector<int> jser(vector<pair<int,int>> ab) {
     vector<int> r(2*ab.size());
     for(int i = 0; auto [a, b] : ab) {
         r[i++] = a;
@@ -182,8 +250,15 @@ vector<int> jser(vector<pair<int, int>> ab) {
     return r;
 }
 
+
 vector<int> js_bfs_reordering(vector<int> u_start) { return jser(bfs_reordering(u_start));   }
 vector<int> js_random_reordering()   { return jser(random_reordering()); }
+
+vector<double> js_get_real_cords() { 
+    vector<double> r(2*N);
+    for(int i = 0; auto xy : rxy) for(int e : xy) r[i++] = e;
+    return r; 
+}
 
 
 // вначале работы подключить emsdk: source ~/EMSCRIPTEN/emsdk/emsdk_env.sh
@@ -198,4 +273,9 @@ EMSCRIPTEN_BINDINGS(my_module) {
     emscripten::function("cpp_get_edges"               , &js_get_edges);
     emscripten::function("cpp_bfs_reordering"          , &js_bfs_reordering);
     emscripten::function("cpp_random_reordering"       , &js_random_reordering);
+
+    register_vector<double>("VectorDouble");
+    emscripten::function("cpp_get_real_cords" , &js_get_real_cords);
+    emscripten::function("cpp_load_real_cords", &load_real_cords);
+    emscripten::function("cpp_one_iteration"  , &one_iteration);
 }

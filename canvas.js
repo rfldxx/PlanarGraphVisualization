@@ -177,6 +177,8 @@ function handleMouseMove(event) {
     let {x, y} = getMousePos(event);
 
     if( isdragging ) {  // перетаскиваем вершину
+        is_actual_real_cords = 0; // рабски всё делаем вручную
+
         vertx[coveredVertex].x = x;
         vertx[coveredVertex].y = y;
         redraw();
@@ -261,13 +263,7 @@ function generate_random_topology() {
     edges = rejser( wasmModule.cpp_get_edges(), 'v1', 'v2' );
 }
 
-let no_topology = 1;
 function random_reordering() {
-    if( no_topology ) {
-        wasmModule.cpp_zero_topology(10);
-        no_topology = 0;
-    }
-
     let xy = rejser( wasmModule.cpp_random_reordering(), 'x', 'y' );
     console.log(xy);
 
@@ -302,27 +298,27 @@ function bfs_reordering() {
 }
 
 // // Загружаем вектор в WebAssembly
-function loadVector() {    
-    const input = document.getElementById('vectorInput').value;
-    const numbers = input.split(',').map(num => parseInt(num.trim())).filter(n => !isNaN(n));
-
-    if (numbers.length === 0) {
-        alert('Please enter valid numbers');
-        return;
-    }
-   
-    // Создаем вектор
-    const vec = new wasmModule.VectorInt();
-    numbers.forEach(n => vec.push_back(n));
-   
-    // Вызываем функцию load
-    wasmModule.load(vec);
-   
-    // Очищаем
-    vec.delete();
-       
-    document.getElementById('loadStatus').innerHTML = `Loaded vector: [${numbers.join(', ')}]`;
-}
+// function loadVector() {    
+//     const input = document.getElementById('vectorInput').value;
+//     const numbers = input.split(',').map(num => parseInt(num.trim())).filter(n => !isNaN(n));
+//
+//     if (numbers.length === 0) {
+//         alert('Please enter valid numbers');
+//         return;
+//     }
+//   
+//     // Создаем вектор
+//     const vec = new wasmModule.VectorInt();
+//     numbers.forEach(n => vec.push_back(n));
+//   
+//     // Вызываем функцию load
+//     wasmModule.load(vec);
+//   
+//     // Очищаем
+//     vec.delete();
+//       
+//     document.getElementById('loadStatus').innerHTML = `Loaded vector: [${numbers.join(', ')}]`;
+// }
 //
 // // Вычисляем сумму
 // function calculateSum() {
@@ -361,6 +357,37 @@ function loadVector() {
 
 
 
+// СИЛОВОЙ АЛГОРИТМ (НУ НАКОНЕЦ-ТО!!!!!!!!!)
+let is_actual_real_cords = 0; // эх, вот-бы вот-бы каждое изменение в vertx меняло и эту переменную
+// cpp_get_real_cords 
+// cpp_load_real_cords
+// cpp_one_iteration 
+
+function one_force_step() {
+    if( !is_actual_real_cords ) {
+        is_actual_real_cords = 1;
+        const cords = new wasmModule.VectorDouble();
+        for(let i = 0; i < vertx.length; i++) { cords.push_back(vertx[i].x); cords.push_back(vertx[i].y); }
+        wasmModule.cpp_load_real_cords(cords);
+        cords.delete();
+    }
+
+    wasmModule.cpp_one_iteration();
+
+    let xy = rejser(wasmModule.cpp_get_real_cords(), 'x', 'y');
+
+    let indent = 20;
+    inscribe_dots(xy, canvas.width - 2*indent, canvas.height - 2*indent);
+
+    for(let i = 0; i < vertx.length; i++) {
+        vertx[i].x = xy[i].x + indent;
+        vertx[i].y = xy[i].y + indent;
+    }
+}
+
+
+
+
 // может её лучше в js?
 function inscribe_dots(dots, X, Y) {
     let min_x = dots[0].x, max_x = dots[0].x;
@@ -383,6 +410,23 @@ function inscribe_dots(dots, X, Y) {
 
 //=================================================================================================
 
+function animated() {
+    let currentStep = 0;
+    const intervalTime = 10;
+    
+    const interval = setInterval(() => {
+        currentStep++;
+        if (currentStep >= 500) {
+            clearInterval(interval);
+            return;
+        }
+        
+        console.log(currentStep);
+
+        for(let t = 0; t < 10; t++) one_force_step();
+        redraw();
+    }, intervalTime);
+}
 
 
 function press(btn) {
@@ -391,9 +435,10 @@ function press(btn) {
     document.getElementById('text').innerHTML = "Pressed: button" + btn;
     
     let skipped = 1;
-    if( btn == 0 ) { skipped = 0; generate_random_topology(); }
-    if( btn == 1 ) { skipped = 0; bfs_reordering();           }
-    if( btn == 2 ) { skipped = 0; random_reordering();        }
+    if( btn == 0 ) { skipped = 0; generate_random_topology(); is_actual_real_cords = 0; }
+    if( btn == 1 ) { skipped = 0; bfs_reordering();           is_actual_real_cords = 0; }
+    if( btn == 2 ) { skipped = 0; random_reordering();        is_actual_real_cords = 0; }
+    if( btn == 3 ) { skipped = 0; animated(); }
     
     if( skipped ) document.getElementById('text').innerHTML += ' <span style="color: blue">currently not worked :(</span>';
     redraw();
