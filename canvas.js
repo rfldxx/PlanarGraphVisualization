@@ -4,6 +4,8 @@ let edges = []; // v1 (id1), v2 (id2)
 let selectedVertex = null;
 let draggingVertex = null;
 
+// выбранные вершины
+let selected   = new Array(100);
 
 // переменные CANVAS
 const canvas = document.getElementById('canvas');
@@ -27,12 +29,12 @@ const COLORS = {
 
 
 // Рисование вершины
-function drawVertex(i) {
+function drawVertex(i, clr = (selected[i] ? COLORS.VERTEX_SELECTED : COLORS.VERTEX)) {
     ctx.beginPath();
     ctx.arc(vertx[i].x, vertx[i].y, VERTEX_RADIUS, 0, Math.PI * 2);
     
     // Выбор цвета в зависимости от состояния
-    ctx.fillStyle = (i == selectedVertex) ? COLORS.VERTEX_SELECTED : COLORS.VERTEX;
+    ctx.fillStyle = clr;
     ctx.fill();
     
     ctx.strokeStyle = '#333';
@@ -81,6 +83,120 @@ function redraw() {
 // Запуск приложения
 // window.onload = 
 redraw();
+
+
+
+
+
+// МЫШКА
+// Инициализация
+function init() {
+    // Настройка обработчиков событий
+    canvas.addEventListener('mousedown'  , handleMouseDown  );
+    canvas.addEventListener('mousemove'  , handleMouseMove  );
+    
+    canvas.addEventListener('contextmenu', handleContextMenu);
+    
+    // !!! НА ЦЕЛЫЙ ДОКУМЕНТ
+    document.addEventListener('mouseup'  , handleMouseUp    );
+    
+    // document.addEventListener('keydown', handleKeyDown);
+    // document.addEventListener('keyup', handleKeyUp);
+    
+    // Первая отрисовка
+    redraw();
+}
+init();
+
+
+// Получение координат мыши
+function getMousePos(event) {
+    const rect = canvas.getBoundingClientRect();
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+}
+
+let isdragging = 0;
+let coveredVertex = -1;
+function isVertexCovered(x, y) {
+    for(let i = 0; i < vertx.length; i++) {
+        let dx = x - vertx[i].x, dy = y - vertx[i].y;
+        if( dx*dx + dy*dy <= VERTEX_RADIUS*VERTEX_RADIUS )
+            return coveredVertex = i; 
+    }
+    return coveredVertex = -1;
+}
+
+
+// не показывать контекстное меню на вершины
+function handleContextMenu(event) {
+    if( coveredVertex != -1 ) event.preventDefault();
+}
+
+
+
+
+let pre_select = -1;
+function handleMouseUp(event) {
+    if( event.button == 0 ) // ЛКМ
+        if( coveredVertex != -1 ) {  // возвращаем исходный цвет
+            drawVertex(coveredVertex);
+            isdragging = 0;
+        }
+
+    if( event.button == 2 ) // ПКМ
+        if( coveredVertex == pre_select ) {  // возвращаем исходный цвет
+            selected[coveredVertex] ^= 1;
+            console.log('selected: ' + coveredVertex);
+
+            drawVertex(coveredVertex);
+            isdragging = 0;
+        }
+}
+
+function handleMouseDown(event) {
+    let {x, y} = getMousePos(event);
+    isVertexCovered(x, y);
+
+    pre_select = -2;
+    if( coveredVertex == -1 ) return;
+
+    console.log( coveredVertex );
+
+    if( event.button == 0 ) { // ЛКМ (перетаскивание)
+        drawVertex(coveredVertex, COLORS.VERTEX_DRAGGING);
+        isdragging = 1;
+    }
+
+    if( event.button == 2 ) { // ПКМ (выделение)
+        pre_select = coveredVertex;
+        console.log('selected: ' + coveredVertex);
+    }
+}
+
+function handleMouseMove(event) {
+    let {x, y} = getMousePos(event);
+
+    if( isdragging ) {  // перетаскиваем вершину
+        vertx[coveredVertex].x = x;
+        vertx[coveredVertex].y = y;
+        redraw();
+        drawVertex(coveredVertex, COLORS.VERTEX_DRAGGING);
+        return;
+    } 
+    
+    isVertexCovered(x, y);
+
+    // Подсветка вершин при наведении
+    canvas.style.cursor = (coveredVertex != -1) ? 'pointer' : 'crosshair';
+}
+
+
+
+
+
+
+
+
 
 
 // === [ модуль WEBASM ] ==========================================================================
@@ -142,7 +258,7 @@ function rejser(abVector, key1, key2) {
 
 function generate_random_topology() {
     wasmModule.cpp_generate_random_topology(10, 15);
-    edges = rejser( wasmModule.cpp_get_edjes(), 'v1', 'v2' );
+    edges = rejser( wasmModule.cpp_get_edges(), 'v1', 'v2' );
 }
 
 let no_topology = 1;
@@ -164,41 +280,62 @@ function random_reordering() {
     }
 }
 
-// // Загружаем вектор в WebAssembly
-// function loadVector() {    
-//     const input = document.getElementById('vectorInput').value;
-//     const numbers = input.split(',').map(num => parseInt(num.trim())).filter(n => !isNaN(n));
-    
-//     if (numbers.length === 0) {
-//         alert('Please enter valid numbers');
-//         return;
-//     }
-    
-//     // Создаем вектор
-//     const vec = new wasmModule.VectorInt();
-//     numbers.forEach(n => vec.push_back(n));
-    
-//     // Вызываем функцию load
-//     wasmModule.load(vec);
-    
-//     // Очищаем
-//     vec.delete();
-        
-//     document.getElementById('loadStatus').innerHTML = `Loaded vector: [${numbers.join(', ')}]`;
-// }
+function bfs_reordering() {
+    const bfs_starts = new wasmModule.VectorInt();
+    let cnt = 0;
+    for(let i = 0; i < vertx.length; i++) {
+        if( selected[i] ) { bfs_starts.push_back(i); cnt++; console.log('bfs: ', i); bfs_reordering}
+    }
+    if( !cnt ) bfs_starts.push_back(0);
+    let xy = rejser( wasmModule.cpp_bfs_reordering(bfs_starts), 'x', 'y' );
+    // Очищаем
+    bfs_starts.delete();
 
+
+    let indent = 20;
+    inscribe_dots(xy, canvas.width - 2*indent, canvas.height - 2*indent);
+
+    for(let i = 0; i < vertx.length; i++) {
+        vertx[i].x = xy[i].x + indent;
+        vertx[i].y = xy[i].y + indent;
+    }
+}
+
+// // Загружаем вектор в WebAssembly
+function loadVector() {    
+    const input = document.getElementById('vectorInput').value;
+    const numbers = input.split(',').map(num => parseInt(num.trim())).filter(n => !isNaN(n));
+
+    if (numbers.length === 0) {
+        alert('Please enter valid numbers');
+        return;
+    }
+   
+    // Создаем вектор
+    const vec = new wasmModule.VectorInt();
+    numbers.forEach(n => vec.push_back(n));
+   
+    // Вызываем функцию load
+    wasmModule.load(vec);
+   
+    // Очищаем
+    vec.delete();
+       
+    document.getElementById('loadStatus').innerHTML = `Loaded vector: [${numbers.join(', ')}]`;
+}
+//
 // // Вычисляем сумму
 // function calculateSum() {
 //     const sum = wasmModule.f();
 //     document.getElementById('sumResult').innerHTML = `Sum of all elements: <strong>${sum}</strong>`;
 // }
-
+//
 // function findNumber() {
 //     const elem = parseInt(document.getElementById('elem').value);
 //     const r = wasmModule.h(elem);
 //     document.getElementById('findResult').innerHTML = `Result: ${r}`;
 // }
-
+//
 // // Умножаем вектор
 // function multiplyVector() {
 //     const multiplier = parseInt(document.getElementById('multiplier').value);
@@ -206,19 +343,19 @@ function random_reordering() {
 //         alert('Please enter a valid number');
 //         return;
 //     }
-    
+//    
 //     // Получаем результат умножения
 //     const resultVec = wasmModule.g(multiplier);
-    
+//    
 //     // Конвертируем в массив
 //     const result = [];
 //     for (let i = 0; i < resultVec.size(); i++) {
 //         result.push(resultVec.get(i));
 //     }
-    
+//    
 //     // Очищаем
 //     resultVec.delete();
-    
+//    
 //     document.getElementById('multiplyResult').innerHTML = `Result: [${result.join(', ')}]`;
 // }
 
@@ -255,6 +392,7 @@ function press(btn) {
     
     let skipped = 1;
     if( btn == 0 ) { skipped = 0; generate_random_topology(); }
+    if( btn == 1 ) { skipped = 0; bfs_reordering();           }
     if( btn == 2 ) { skipped = 0; random_reordering();        }
     
     if( skipped ) document.getElementById('text').innerHTML += ' <span style="color: blue">currently not worked :(</span>';

@@ -118,9 +118,10 @@ vector<pair<int, int>> random_reordering() {
 }
 
 // возвращает координаты
-vector<pair<int, int>> bfs_reordering(int u) {
-    vector<bool> was(N); was[u] = 1;
-    vector<vector<int>> layers = {{u}};
+vector<pair<int, int>> bfs_reordering(vector<int> u_start) {
+    vector<bool> was(N); 
+    for(auto u : u_start) was[u] = 1;
+    vector<vector<int>> layers = { u_start };
 
     int h = 0;
     while( !layers[h].empty() ) {
@@ -135,17 +136,17 @@ vector<pair<int, int>> bfs_reordering(int u) {
         h++;
     }
 
-    int  maxl = 0;
-    bool chet = 0;
+    int  maxl    = 0;
+    bool chet[2] = {0, 0};
     for(int i = 0; i < h; i++) {
-        chet |= layers[i].size();
+        chet[layers[i].size() % 2] |= 1;
         maxl = max(maxl, (int)layers[i].size());
     }
 
     vector<pair<int, int>> xy(N);
-    int step = 1 + chet;
+    int step = chet[0] + chet[1];
     for(int y = 0; y < h; y++) {
-        int x = (maxl - layers[y].size()) / (2 - chet);
+        int x = (maxl - layers[y].size()) / step;
         for(auto i : layers[y]) {
             xy[i] = {x, y};
             x += step;
@@ -160,16 +161,16 @@ vector<pair<int, int>> bfs_reordering(int u) {
 
 
 // ПОДГОТОВКА ФОРМАТА ДЛЯ коммуникации по webasm
-vector<int> js_get_edjes() {
-    vector<int> edjes;
+vector<int> js_get_edges() {
+    vector<int> edges;
     for(int i = 0; i < N; i++) {
         for(auto j : adj[i])
             if ( j > i ) {
-                edjes.push_back(i);
-                edjes.push_back(j);
+                edges.push_back(i);
+                edges.push_back(j);
             }
     }
-    return edjes;
+    return edges;
 }
 
 vector<int> jser(vector<pair<int, int>> ab) {
@@ -181,7 +182,7 @@ vector<int> jser(vector<pair<int, int>> ab) {
     return r;
 }
 
-vector<int> js_bfs_reordering(int u) { return jser(bfs_reordering(u));   }
+vector<int> js_bfs_reordering(vector<int> u_start) { return jser(bfs_reordering(u_start));   }
 vector<int> js_random_reordering()   { return jser(random_reordering()); }
 
 
@@ -191,10 +192,10 @@ vector<int> js_random_reordering()   { return jser(random_reordering()); }
 using namespace emscripten;
 EMSCRIPTEN_BINDINGS(my_module) {
     register_vector<int>("VectorInt");
-    emscripten::function("cpp_zero_topology", &zero_topology);
+    emscripten::function("cpp_zero_topology"           , &zero_topology);
     emscripten::function("cpp_generate_random_topology", &generate_random_topology);
     emscripten::function("cpp_load_topology"           , &load_topology);
-    emscripten::function("cpp_get_edjes"               , &js_get_edjes);
+    emscripten::function("cpp_get_edges"               , &js_get_edges);
     emscripten::function("cpp_bfs_reordering"          , &js_bfs_reordering);
     emscripten::function("cpp_random_reordering"       , &js_random_reordering);
 }
