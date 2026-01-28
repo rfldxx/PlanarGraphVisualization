@@ -175,11 +175,13 @@ void load_real_cords(vector<double> xy) {
 void one_iteration() {
     for(int i = 0; i < N; i++) forces[i][0] = forces[i][1] = 0;
 
+    double min_l2 = 100000;
     // парные силы
     for(int i = 0; i < N; i++) {
         for(int j = i+1; j < N; j++) {
             double dx = rxy[i][0] - rxy[j][0], dy = rxy[i][1] - rxy[j][1];
             double l2 = dx*dx + dy*dy;
+            min_l2 = min(min_l2, l2);
             
             forces[i][0] += +100*dx/l2;
             forces[i][1] += +100*dy/l2;
@@ -204,11 +206,18 @@ void one_iteration() {
     }
 
     // смещение
-    double max_f = 0;
-    for(int i = 0; i < N; i++) max_f = max( {max_f, forces[i][0], forces[i][1]} );
+    double max_f = 0, avg_ff[2] = {};
+    for(int i = 0; i < N; i++) {
+        max_f = max( {max_f, forces[i][0], forces[i][1]} );
+        avg_ff[0] += abs(forces[i][0]);
+        avg_ff[1] += abs(forces[i][1]);
+    }
+
+    double avg_f = min(avg_ff[0], avg_ff[1]) / N;
 
     // хотим чтобы max_f < 10
-    double scaling = (/*max_f > 10000 ||*/ max_f < 20) ? 1./max_f : 1.;
+    double scaling = (max_f/avg_f < min_l2/10) ? min_l2*avg_f/(10*max_f) : 1.;
+
     for(int i = 0; i < N; i++) {
         for(int t : {0, 1}) rxy[i][t]  += scaling*forces[i][t];
     }
