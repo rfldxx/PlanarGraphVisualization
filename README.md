@@ -1,3 +1,20 @@
+### ОБНОВА: наконец проект выходит и "замороженной" стадии
+По "геометрически корректному эмбедингу" строится граф. А иммено для входа:
+```
+1 8 4 7 3 5 2 6 0
+2 8 6
+3 7 5
+4 8 7
+5 7 8 2
+6 8 9 0
+7 8
+8 0 9
+9 0
+```
+Получится:
+
+![](1_grind_graphs.png)
+
 ### Мечты
 * https://www1.pub.informatik.uni-wuerzburg.de/demos/forceDirected.html
 * https://www.youtube.com/playlist?list=PLubYOWSl9mIvoXDwf_Wqcrvlg15N_AWQE
