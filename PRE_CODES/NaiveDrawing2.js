@@ -155,22 +155,21 @@ function draw_vertex(i) {
     // Б. дорисовка входящих рёбер 
     // Б.1. сначала затираем прошлые нарисованные ребра (при необходимости)
     for(let xy of lst) {
-        // затираем прошлое нарисованное ребро (при необходимости)
-        if( xy.y > maxY && xy.x != x ) {
-            let prev = xy.from;
-            if( prev != -1 ) {
-                // стираем прошлое
-                draw_segment(xy.x, xy.y, vertex[prev].x, vertex[prev].y, COLORS.BACKGROUND, 3);
-                draw_circle( xy.x, xy.y, 5, COLORS.BACKGROUND, COLORS.BACKGROUND, 3);
-                
-                // перерисовываем ребро к ребенку
-                draw_segment(x, y, vertex[prev].x, vertex[prev].y, COLORS.PURPLE);
-                draw_vertex_label(prev);
+        if( !( xy.y > maxY && xy.x != x ) ) continue; 
+        
+        let prev = xy.from;
+        if( prev == -1 ) continue;
+        
+        // стираем прошлое ребро
+        draw_segment(xy.x, xy.y, vertex[prev].x, vertex[prev].y, COLORS.BACKGROUND, 3);
+        draw_circle( xy.x, xy.y, 5, COLORS.BACKGROUND, COLORS.BACKGROUND, 3);
+        
+        // перерисовываем ребро к ребенку
+        draw_segment(x, y, vertex[prev].x, vertex[prev].y, COLORS.PURPLE);
+        draw_vertex_label(prev);
 
-                xy.x = x;
-                xy.y = y;
-            }
-        }
+        xy.x = x;
+        xy.y = y;
     }
 
     // Б.2. уже только рисуем
