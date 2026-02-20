@@ -13,7 +13,19 @@
 ```
 Получится:
 
+<details>
+<summary> Step 1. </summary>
+ 
 ![](1_grind_graphs.png)
+
+</details>
+
+<details>
+<summary> Step 2. </summary>
+
+ ![](2_grind_graphs.png)
+
+</details>
 
 ### Мечты
 * https://www1.pub.informatik.uni-wuerzburg.de/demos/forceDirected.html
