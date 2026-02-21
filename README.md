@@ -36,6 +36,10 @@
 
 </details>
 
+ДА ЁМАЁ, КОНЕЧНО ЖЕ ТАКОЕ УЖЕ ЕСТЬ,,,, (И НАВЕРНОЕ ПРИ ЭТОМ ЕЩЁ И ПРОЩЕ И ЛУЧШЕ!!) \
+И оказывается это было даже в том [плейлесте](https://www.youtube.com/watch?v=3_FbSCWLC3A&list=PLubYOWSl9mIvoXDwf_Wqcrvlg15N_AWQE&index=38) только чуть ниже, см:  **SUGIYAMA FRAMEWORK**. 
+
+
 ### Мечты
 * https://www1.pub.informatik.uni-wuerzburg.de/demos/forceDirected.html
 * https://www.youtube.com/playlist?list=PLubYOWSl9mIvoXDwf_Wqcrvlg15N_AWQE
