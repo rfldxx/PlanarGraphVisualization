@@ -27,6 +27,15 @@
 
 </details>
 
+<details>
+<summary> Step 3. (pre-release) </summary>
+
+ ![](3a_grind_graphs.png)
+ 
+ ![](3b_grind_graphs.png)
+
+</details>
+
 ### Мечты
 * https://www1.pub.informatik.uni-wuerzburg.de/demos/forceDirected.html
 * https://www.youtube.com/playlist?list=PLubYOWSl9mIvoXDwf_Wqcrvlg15N_AWQE
