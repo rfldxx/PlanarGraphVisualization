@@ -16,23 +16,38 @@
 <details>
 <summary> Step 1. </summary>
  
-![](1_grind_graphs.png)
+![](images/1_grind_graphs.png)
 
 </details>
 
 <details>
 <summary> Step 2. </summary>
 
- ![](2_grind_graphs.png)
+Улучшенно построение рёбер между вершинами с разницой в один уровень. Также перестал добавляться дополнительный уровень при объединении многих рёберв одну вершину.
+
+![](images/2_grind_graphs.png)
 
 </details>
+
 
 <details>
 <summary> Step 3. (pre-release) </summary>
 
- ![](3a_grind_graphs.png)
+Попытка сближать (сдвигать) вертикальные рёбра чтобы уменьшить ширину. Углы входящих в вершины рёбер не меняются (но из-за сдвига вертикальных рёбер, входящие рёбра могут укрощаться). Вертикальное ребро сдвигается пока горизонтальное растояние до какого-то "узла" не станет `min_dX`, если изначально расстояние было меньше `min_dX`, то ребро никуда не перемещается (не происходит никакого отодвижения).
+
+
+<details>
+<summary> Промежуточные варианты </summary>
  
- ![](3b_grind_graphs.png)
+![](images/3a_grind_graphs.png)
+
+![](images/3b_grind_graphs.png)
+
+![](images/3c_extended_grind_graphs.png)
+
+</details>
+
+![](images/3c_grind_graphs.png)
 
 </details>
 
