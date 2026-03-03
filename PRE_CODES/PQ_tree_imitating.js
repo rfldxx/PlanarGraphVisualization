@@ -164,10 +164,20 @@ function draw_earflaps(x1, x2, y1, y2, drawed_ctx = ctx, clr = COLORS.RED) {
     cnt_rect++;
 }
 
+function draw_box(cur, drawed_ctx = ctx, clr = COLORS.PURPLE) {
+    let xx1 = PQdraw[cur].x1, xx2 = PQdraw[cur].x2, yy1 = PQdraw[cur].y, yy2 = yy1 + dY*PQdraw[cur].h;
+    draw_earflaps(xx1, xx2, yy1 - VERTEX_RADIUS, yy2 + 30, drawed_ctx, clr);
+}
 
+function draw_boxes(cur, drawed_ctx = ctx, clr = COLORS.PURPLE) {
+    draw_box(cur, drawed_ctx, clr);
+    for(let nxt of PQchilds[cur]) draw_boxes(nxt, drawed_ctx, clr);
+}
+
+
+// СОЗДАЁМ ДОПОЛНИТЕЛЬНЫЙ canvas НАД ПЕРВЫМ (для анимаций) -> ОТМЕНА он съезженный какой-то
 // ================================================================================================
-// СОЗДАЁМ ДОПОЛНИТЕЛЬНЫЙ canvas НАД ПЕРВЫМ (для анимаций)
-// -> ОТМЕНА он съезженный какой-то
+
 
 
 // НОВАЯ ГЛАВА
@@ -212,7 +222,7 @@ let PQprev        = [];
 
 let PQroot = 0;
 
-let PQdraw        = [];  // {x, y, x1, x2, i1, i2} x,y - координаты узла, x1,x2 - координаты границ поддерева, i1,i2 - индексы граничных листьев поддерева
+let PQdraw        = [];  // {x, y, x1, x2, h, i1, i2} x,y - координаты узла, x1,x2 - координаты границ поддерева, i1,i2 - индексы граничных листьев поддерева
 // ! вершина получает свою y координату при первом добавлении в PQtree
 
 function restartPQ() {
@@ -307,7 +317,9 @@ function tree_read() {
 
     recalc_coords();
     draw_subtree(0);
-    // animate_rotation(0);
+    // animate_rotation(1);
+
+    // draw_boxes(0);
 
     
     console.log('PQdraw : ', PQdraw);
@@ -393,10 +405,9 @@ function recalc_coords() {
             calls[p]++;
             sum  [p] += sum[v];
             cnt  [p] += cnt[v];
-            PQdraw[p].x1 = Math.min(PQdraw[p].x1, PQdraw[v].x1   );
-            PQdraw[p].x2 = Math.max(PQdraw[p].x2, PQdraw[v].x2   );
+            PQdraw[p].x1 = Math.min(PQdraw[p].x1, PQdraw[v].x1);
+            PQdraw[p].x2 = Math.max(PQdraw[p].x2, PQdraw[v].x2);
             PQdraw[p].h  = Math.max(PQdraw[p].h , PQdraw[v].h + 1);
-
             PQdraw[p].i1 = Math.min(PQdraw[p].i1, PQdraw[v].i1);
             PQdraw[p].i2 = Math.max(PQdraw[p].i2, PQdraw[v].i2);
             
@@ -459,6 +470,8 @@ let extra_canvas1, extra_canvas2, extra_canvas3, extra_canvas4;
 let animation_parent_x, animation_parent_y;
 let animation_edge_to = [];  // {x, y} - запрос на ребро к этой вершине от animation_parent
 
+let currentAnimationFrame = null;  // идентификатор текущего работающего requestAnimationFrame
+let animation_start_time  = -1;
 
 // ================================================================================================
 // [ АНИМАЦИЯ ОТЗЕРКАЛИВАНИЯ ]
@@ -477,7 +490,6 @@ function recurse_mirroring(cur, x_centre) {
 }
 
 // ОТЗЕРКАЛИВАНИЕ
-let animate_rotation_start_time   = -1;
 let animate_rotation_x_centre     = -1;
 let animate_rotation_variant_sign = -1; // или +1 
 
@@ -486,13 +498,15 @@ let ALPHA = 4;
 
 // ПРОБЛЕМА - тут зависим от координат рёбер - А ХОТИМ ТОЛЬКО ПО offScreen-ам делать
 function animate_rotation_frame(currT) {
-    if( animate_rotation_start_time == -1 ) animate_rotation_start_time = currT;
+    if( animation_start_time == -1 ) animation_start_time = currT;
 
     // кароче всё на ctx просто рисуем, с topCtx как-то съезжают координаты
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    let dT = currT - animate_rotation_start_time;
+    let dT = currT - animation_start_time;
     if( dT > AnimeTime ) {
+        currentAnimationFrame = null;
+
         // финальный кадр
         if( animation_edge_to.length ) {  // рисование ребра
             let {x, y} = animation_edge_to[0];
@@ -559,7 +573,7 @@ function animate_rotation(i) {
     draw_subtree(0,  i, extra_canvas1.getContext('2d'));
     draw_subtree(i, -1, extra_canvas2.getContext('2d'));
     // рисуем коробки для вращающихся элементов [ для ЭПИЧНОСТИ))) ]
-    // draw_boxes(i, animated_start_canvas.getContext('2d'));
+    draw_boxes(i, extra_canvas2.getContext('2d'), COLORS.RED);
 
 
     // зеркалим "картинку"
@@ -568,7 +582,7 @@ function animate_rotation(i) {
     draw_subtree(i, -1, extra_canvas3.getContext('2d'));
 
     // рисуем коробки для вращающихся элементов [ для ЭПИЧНОСТИ))) ]
-    // draw_boxes(i, animated_ended_canvas.getContext('2d'));
+    draw_boxes(i, extra_canvas3.getContext('2d'), COLORS.RED);
 
     // зеркалим bottom_layer
     let i1 = PQdraw[i].i1, i2 = PQdraw[i].i2;
@@ -579,8 +593,9 @@ function animate_rotation(i) {
     }
     
     // чё сама анимация?? неее
-    animate_rotation_start_time = -1;
-    requestAnimationFrame(animate_rotation_frame);
+    if( currentAnimationFrame ) cancelAnimationFrame(currentAnimationFrame);
+    animation_start_time  = -1;
+    currentAnimationFrame = requestAnimationFrame(animate_rotation_frame);
 }
 
 
@@ -588,19 +603,20 @@ function animate_rotation(i) {
 // ================================================================================================
 // [ АНИМАЦИЯ ПЕРЕМЕЩЕНИЯ ]
 
-let animate_permutation_start_time = -1;
 let animate_permutation_blck_dx;
 let animate_permutation_vrtx_dx;
 
 // ПРОБЛЕМА - тут зависим от координат рёбер - А ХОТИМ ТОЛЬКО ПО offScreen-ам делать
 function animate_permutation_frame(currT) {
-    if( animate_permutation_start_time == -1 ) animate_permutation_start_time = currT;
+    if( animation_start_time == -1 ) animation_start_time = currT;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
 
-    let dT = currT - animate_permutation_start_time;
+    let dT = currT - animation_start_time;
     if( dT > AnimeTime ) {
+        currentAnimationFrame = null;
+
         // ФИНАЛЬНЫЙ КАДР
         // рисование ребер к блоку
         for(let i = 1; i < animation_edge_to.length; i++) {
@@ -763,11 +779,10 @@ function animate_permutation(i, new_pos_in_childs) {
     }
     // рисуем коробки для анимированных элементов [ для ЭПИЧНОСТИ))) ]
     // СДЕЛАТЬ ТУТ РАЗНЫЕ ЦВЕТА У КОРОБОК
-    // for(let j = blck_lft_pos; j <= blck_rht_pos; j++) {
-    //     let nxt = currStepChilds[prv][j];
-    //     draw_boxes(nxt, animate_permutation_block_canvas.getContext('2d'), 0, COLORS.BLUE);
-    // }
-    // draw_boxes(i, animated_start_canvas.getContext('2d'), 0, COLORS.RED);
+    for(let j = blck_lft_pos; j <= blck_rht_pos; j++) {
+        draw_boxes(layer[j], extra_canvas3.getContext('2d'), COLORS.BLUE);
+    }
+    draw_boxes(i, extra_canvas2.getContext('2d'), COLORS.RED);
 
     
 
@@ -795,10 +810,10 @@ function animate_permutation(i, new_pos_in_childs) {
     console.log('AFTER  CHANGE:\n    bottom_layer:', bottom_layer);
 
 
-
     // // чё сама анимация?? неее
-    animate_permutation_start_time = -1;
-    requestAnimationFrame(animate_permutation_frame);
+    if( currentAnimationFrame ) cancelAnimationFrame(currentAnimationFrame);
+    animation_start_time  = -1;
+    currentAnimationFrame = requestAnimationFrame(animate_permutation_frame);
 }
 
 
@@ -807,13 +822,9 @@ function animate_permutation(i, new_pos_in_childs) {
 
 
 
+// ================================================================================================
 
 
-function draw_boxes(cur, drawed_ctx = ctx, dy = 0, clr = COLORS.RED) {
-    let xx1 = SubtreeBorders[cur].x1, xx2 = SubtreeBorders[cur].x2, yy1 = dY*(Ylvl[cur]+1) - VERTEX_RADIUS, yy2 = SubtreeBorders[cur].y2;
-    draw_earflaps(xx1, xx2, yy1 + dy, yy2 + dy, drawed_ctx, clr);
-    for(let nxt of currStepChilds[cur]) draw_boxes(nxt, drawed_ctx, dy, clr);
-}
 
 
 
