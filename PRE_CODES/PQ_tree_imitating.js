@@ -48,7 +48,8 @@ const COLORS = {
     PURPLE: '#8b00ff',
     RED: '#da2d2d',
     BLUE: '#2196F3',
-    GREEN: '#45a049'
+    GREEN: '#45a049',
+    ORANGE: '#FF5722'
 };
 
 function draw_segment(x1, y1, x2, y2, clr = COLORS.EDGE, ww = 2, drawed_ctx = ctx) {
@@ -136,14 +137,49 @@ function draw_edge(i, j, drawed_ctx = ctx) {
     draw_segment(px, py, x, y, COLORS.EDGE, 2, drawed_ctx);
 }
 
-function draw_edge_to(i, drawed_ctx = ctx) {
+
+function draw_triangle_on_segment(x1, y1, x2, y2, drawed_ctx = ctx, clr = COLORS.ORANGE) {
+    let R  = 7;  // радиус описанной окружности треугольника (брр, но так проще стороны по-выражать)
+    let da = 2*Math.PI/3;
+
+    // направление ребра
+    const angle = Math.atan2(y2-y1, x2-x1);
+    let xc = (x2+x1)/2, yc = (y2+y1)/2;
+
+    const vertices = [ 
+        {x: xc + R * Math.cos(angle)     ,  y: yc + R * Math.sin(angle)     },
+        {x: xc + R * Math.cos(angle + da),  y: yc + R * Math.sin(angle + da)},
+        {x: xc + R * Math.cos(angle - da),  y: yc + R * Math.sin(angle - da)}
+    ];
+
+    drawed_ctx.save();
+    drawed_ctx.strokeStyle = 'black';
+    drawed_ctx.fillStyle   = COLORS.ORANGE;
+    drawed_ctx.lineWidth   = 1;
+    drawed_ctx.beginPath();
+    drawed_ctx.moveTo(vertices[0].x, vertices[0].y);
+    drawed_ctx.lineTo(vertices[1].x, vertices[1].y);
+    drawed_ctx.lineTo(vertices[2].x, vertices[2].y);
+    drawed_ctx.closePath();
+    drawed_ctx.fill();
+    drawed_ctx.stroke();
+    drawed_ctx.restore();
+}
+
+let highlighted_up_edges_from;
+function draw_edge_to(i, drawed_ctx = ctx, clr = COLORS.EDGE) {
     if( i == 0 ) return;
     let [px, py] = get_coords(PQprev[i]);
     let [ x,  y] = get_coords(i);
 
     if( PQvertex_type[PQprev[i]] < 0 ) px = x;  // Q-node
 
-    draw_segment(px, py, x, y, COLORS.EDGE, 2, drawed_ctx);
+    let highlight = highlighted_up_edges_from.has(i);
+    if( highlight ) clr = COLORS.ORANGE;
+
+    draw_segment(px, py, x, y, clr, 2, drawed_ctx);
+
+    if( highlight ) draw_triangle_on_segment(x, y, px, py, drawed_ctx);   
 }
 
 let cnt_rect = 0;
@@ -264,7 +300,8 @@ function st_Numbering(edges) {
 }
 
 function tree_read() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    highlighted_up_edges_from = new Map();
+
     restartREAL();
     restartPQ();
 
@@ -293,16 +330,19 @@ function tree_read() {
     // "Первое" построение PQ-дерева
     newPQnode(N, -1);
     bottom_layer = [0];
+
+    vertex_to_expand = 0;
+    next_vertex_expand();
+    return;
+
+
+
     expand(0);
-
-    console.log(bottom_layer);
-
     expand(1);
     expand(2);
     expand(3);
     expand(4);
 
-    
     // expand(5);
 
     let bl = [...bottom_layer];
@@ -346,6 +386,7 @@ function expand(real_vertex) {
             // удаляем из детей
             let prv = PQprev[u];
             PQchilds[prv].splice(PQchilds[prv].indexOf(u), 1);
+            // new_bottom_layer.push(u); 
             continue;
         }
         first_mention = 0;
@@ -468,7 +509,7 @@ function push_back_to_history() {
 let AnimeTime = 2000;
 let extra_canvas1, extra_canvas2, extra_canvas3, extra_canvas4;
 let animation_parent_x, animation_parent_y;
-let animation_edge_to = [];  // {x, y} - запрос на ребро к этой вершине от animation_parent
+let animation_edge_to = [];  // {x, y, is_highlighted} - запрос на ребро к этой вершине от animation_parent
 
 let currentAnimationFrame = null;  // идентификатор текущего работающего requestAnimationFrame
 let animation_start_time  = -1;
@@ -509,10 +550,13 @@ function animate_rotation_frame(currT) {
 
         // финальный кадр
         if( animation_edge_to.length ) {  // рисование ребра
-            let {x, y} = animation_edge_to[0];
+            let {x, y, is_highlighted} = animation_edge_to[0];
             x = 2*animate_rotation_x_centre - x;  // отзеркаленный
             let px = (animation_parent_x == -1) ? x : animation_parent_x;
-            draw_segment(px, animation_parent_y, x, y);
+            draw_segment(px, animation_parent_y, x, y, (is_highlighted ? COLORS.ORANGE : COLORS.EDGE));
+            if( is_highlighted ) {  // рисуем треугольник на ребре 
+                draw_triangle_on_segment(x, y, px, animation_parent_y);
+            }
         }
         ctx.drawImage(extra_canvas1, 0, 0);  // фон
         ctx.drawImage(extra_canvas3, 0, 0);  // отзеркаленное поддерево
@@ -526,11 +570,14 @@ function animate_rotation_frame(currT) {
     
     // рисование ребра
     if( animation_edge_to.length ) {
-        let {x, y} = animation_edge_to[0];
+        let {x, y, is_highlighted} = animation_edge_to[0];
         let nx = c_r1 * x +    (1-c_r1)*animate_rotation_x_centre;
         let ny = c_r2 * x + y    -c_r2 *animate_rotation_x_centre;
         let px = (animation_parent_x == -1) ? nx : animation_parent_x;
-        draw_segment(px, animation_parent_y, nx, ny);
+        draw_segment(px, animation_parent_y, nx, ny, (is_highlighted ? COLORS.ORANGE : COLORS.EDGE));
+        if( is_highlighted ) {  // рисуем треугольник на ребре 
+            draw_triangle_on_segment(nx, ny, px, animation_parent_y);
+        }
     }
 
     ctx.drawImage(extra_canvas1, 0, 0);  // фон
@@ -562,7 +609,7 @@ function animate_rotation(i) {
     
         // запрос на ребро
         let [xx, yy] = get_coords(i);
-        animation_edge_to = [ {x: xx, y: yy} ];
+        animation_edge_to = [ {x: xx, y: yy, is_highlighted: highlighted_up_edges_from.has(i)} ];
     }
     
 
@@ -620,16 +667,22 @@ function animate_permutation_frame(currT) {
         // ФИНАЛЬНЫЙ КАДР
         // рисование ребер к блоку
         for(let i = 1; i < animation_edge_to.length; i++) {
-            let {x, y} = animation_edge_to[i];
+            let {x, y, is_highlighted} = animation_edge_to[i];
             x += animate_permutation_blck_dx;  // сдвинутый
             let px = (animation_parent_x == -1) ? x : animation_parent_x;
-            draw_segment(px, animation_parent_y, x, y);
+            draw_segment(px, animation_parent_y, x, y, (is_highlighted ? COLORS.ORANGE : COLORS.EDGE));
+            if( is_highlighted ) {  // рисуем треугольник на ребре 
+                draw_triangle_on_segment(x, y, px, animation_parent_y);
+            }
         }
         {   // рисование ребра к поддереву
-            let {x, y} = animation_edge_to[0];
+            let {x, y, is_highlighted} = animation_edge_to[0];
             x += -animate_permutation_vrtx_dx;  // сдвинутый
             let px = (animation_parent_x == -1) ? x : animation_parent_x;
-            draw_segment(px, animation_parent_y, x, y);
+            draw_segment(px, animation_parent_y, x, y, (is_highlighted ? COLORS.ORANGE : COLORS.EDGE));
+            if( is_highlighted ) {  // рисуем треугольник на ребре 
+                draw_triangle_on_segment(x, y, px, animation_parent_y);
+            }
         }
 
         ctx.drawImage(extra_canvas1, 0, 0);  // фон
@@ -644,11 +697,14 @@ function animate_permutation_frame(currT) {
     
     // рисование ребер к блоку
     for(let i = 1; i < animation_edge_to.length; i++) {
-        let {x, y} = animation_edge_to[i];
+        let {x, y, is_highlighted} = animation_edge_to[i];
         x += curr_blck_dx;  // сдвинутый
         // лол, было-бы странно если бы parent был Q-node (ведь мы тут переставляем вершины!)
         let px = (animation_parent_x == -1) ? x : animation_parent_x;
-        draw_segment(px, animation_parent_y, x, y);
+        draw_segment(px, animation_parent_y, x, y, (is_highlighted ? COLORS.ORANGE : COLORS.EDGE));
+        if( is_highlighted ) {  // рисуем треугольник на ребре 
+            draw_triangle_on_segment(x, y, px, animation_parent_y);
+        }
     }
     
 
@@ -685,10 +741,13 @@ function animate_permutation_frame(currT) {
     }
 
     {   // рисование ребра к поддереву
-        let {x, y} = animation_edge_to[0];
+        let {x, y, is_highlighted} = animation_edge_to[0];
         x += sbtr_shift_x;  // сдвинутый
         let px = (animation_parent_x == -1) ? x : animation_parent_x;
-        draw_segment(px, animation_parent_y, x, y + sbtr_shift_y);
+        draw_segment(px, animation_parent_y, x, y + sbtr_shift_y, (is_highlighted ? COLORS.ORANGE : COLORS.EDGE));
+        if( is_highlighted ) {  // рисуем треугольник на ребре 
+            draw_triangle_on_segment(x, y + sbtr_shift_y, px, animation_parent_y);
+        }
     }
     
     // draw_vertex_label(parent);  // <- НАДО ПОФИКСИТЬ (УБРАТЬ ИСПОЛЬЗОВАНИЕ) -> перенесём на extra_canvas4
@@ -758,7 +817,7 @@ function animate_permutation(i, new_pos_in_childs) {
     draw_subtree(i, -1, extra_canvas2.getContext('2d'));
     {   // запрос на ребро (к передвигаемой вершине)
         let [xx, yy] = get_coords(i);
-        animation_edge_to = [ {x: xx, y: yy} ];
+        animation_edge_to = [ {x: xx, y: yy, is_highlighted: highlighted_up_edges_from.has(i)} ];
     }
     // чтобы ребро к передвигаемому поддереву не загораживало parent (можно было лучше... но так быстрее)
     extra_canvas4 = new OffscreenCanvas(canvas.width, canvas.height);
@@ -775,7 +834,7 @@ function animate_permutation(i, new_pos_in_childs) {
         draw_subtree(layer[j], -1, extra_canvas3.getContext('2d'));
         // запрос на ребро
         let [xx, yy] = get_coords(layer[j]);
-        animation_edge_to.push( {x: xx, y: yy} );
+        animation_edge_to.push( {x: xx, y: yy, is_highlighted: highlighted_up_edges_from.has(layer[j])} );
     }
     // рисуем коробки для анимированных элементов [ для ЭПИЧНОСТИ))) ]
     // СДЕЛАТЬ ТУТ РАЗНЫЕ ЦВЕТА У КОРОБОК
@@ -819,10 +878,45 @@ function animate_permutation(i, new_pos_in_childs) {
 
 
 
-
+// ================================================================================================
+// как сделать все вершины подряд???
 
 
 // ================================================================================================
+// КНОПКА [next]
+
+let vertex_to_expand = 0;
+function next_vertex_expand() {
+    if( vertex_to_expand >= N ) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    expand(vertex_to_expand);
+
+
+    // for(let i = 0; i < 100; i++) highlighted_up_edges_from.set(i, 1);
+
+    // highlighted_up_edges_from.set(1, 1);
+    // highlighted_up_edges_from.set(5, 1);
+
+    let bl = [...bottom_layer];
+    for(let i in bl) bl[i] = PQvertex_type[bl[i]] - N;
+    console.log('AFTER EXPAND: ', vertex_to_expand, '  |  bottom_layer: ', bottom_layer, '  |  bl: ', bl);
+
+
+
+    recalc_coords();
+    draw_subtree(0);
+
+    if( vertex_to_expand >= 1 ) {
+        // animate_rotation(1);
+        animate_permutation(5, 3);
+        // animate_permutation(5, 3);
+    }
+
+    // expand(vertex_to_expand);
+
+    vertex_to_expand++;
+}
 
 
 
