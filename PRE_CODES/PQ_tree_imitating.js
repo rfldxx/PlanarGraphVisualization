@@ -259,25 +259,30 @@ let PQvertex_type = [];
 let PQchilds      = [];
 let PQprev        = [];
 
+let is_pertinent_node = [];
+
 let PQroot = 0;
 
 let PQdraw        = [];  // {x, y, x1, x2, h, i1, i2} x,y - координаты узла, x1,x2 - координаты границ поддерева, i1,i2 - индексы граничных листьев поддерева
 // ! вершина получает свою y координату при первом добавлении в PQtree
 
 function restartPQ() {
-    PQvertex_type = [];
-    PQchilds      = [];
-    PQprev        = [];
+    PQvertex_type     = [];
+    PQchilds          = [];
+    PQprev            = [];
+    is_pertinent_node = [];
+    PQdraw            = [];
 }
 
 function newPQnode(type, prev, childs = []) {  // , childs??
     // if( PQfree_pos.length != 0 ) return PQfree_pos.pop();
 
     // надо создавать новую позицию в "массиве" хранящем PQ_tree
-    PQvertex_type.push(type);
-    PQchilds     .push(childs);
-    PQprev       .push(prev);
-    PQdraw       .push({x: 10, y: (prev != -1 ? PQdraw[prev].y : 0) + dY, x1: canvas.width, x2: -1, h: 0, i1: -1, i2: -1});
+    PQvertex_type    .push(type);
+    PQchilds         .push(childs);
+    PQprev           .push(prev);
+    is_pertinent_node.push(0);
+    PQdraw           .push({x: 10, y: (prev != -1 ? PQdraw[prev].y : 0) + dY, x1: canvas.width, x2: -1, h: 0, i1: -1, i2: -1});
     return PQvertex_type.length - 1;
 }
 
@@ -320,7 +325,7 @@ function tree_read() {
     }
 
     // ПОКА ПРЕДПОЛАГАЕМ ТАК
-    PQroot = str_to_indx.get(input[0]);
+    // PQroot = str_to_indx.get(input[0]);
 
 
     N = REAL_VERTEX_NAME.length;
@@ -335,7 +340,9 @@ function tree_read() {
     bottom_layer = [0];
 
     vertex_to_expand = 0;
-    next_vertex_expand();
+    recalc_coords();
+    draw_subtree(0);
+    // next_vertex_expand();
     return;
 
 
@@ -408,9 +415,20 @@ function expand(real_vertex) {
 // ================================================================================================
 // [ ПОДСЧЁТ ВСЕХ КООРДИНАТ ]
 
+let pertinent_vertex_order = [];
+let pertinent_root = -1;
+
+
 let SILLY_SHIFT_X  =  50;
 let AvailableWidth = 700;
 function recalc_coords() {
+    pertinent_vertex_order = [];
+    pertinent_root         = -1;
+    let min_pertinent_i1 = PQvertex_type.length, max_pertinent_i2 = -1;
+    
+    pertinent_reducing_pos    = 0;
+    highlighted_up_edges_from = new Map();
+
     // 0. СБРАСЫВАЕМ ОГРАНИЧИВАЮЩИЕ ПРЯМОУГОЛЬНИКИ
     for(let i = 0; i < PQvertex_type.length; i++) {
         PQdraw[i].x1 = SILLY_SHIFT_X + AvailableWidth;
@@ -418,6 +436,8 @@ function recalc_coords() {
         PQdraw[i].h  =  0;
         PQdraw[i].i1 = bottom_layer.length;
         PQdraw[i].i2 = -1;
+
+        is_pertinent_node[i] = 0;
     }
 
     // 1. ПОДСЧЁТ ДЛЯ ЛИСТЬЕВ
@@ -431,6 +451,13 @@ function recalc_coords() {
         PQdraw[v].x1 = PQdraw[v].x - VERTEX_RADIUS;
         PQdraw[v].x2 = PQdraw[v].x + VERTEX_RADIUS;
         PQdraw[v].i1 = PQdraw[v].i2 = i;
+
+        // pertinent виртуальная вершина
+        if( PQvertex_type[v]-N == vertex_to_expand ) {
+            is_pertinent_node[v] = 1;
+            min_pertinent_i1 = Math.min(min_pertinent_i1, i);
+            max_pertinent_i2 = Math.max(max_pertinent_i2, i);
+        }
     }
 
     // 2. ПОДЪЁМ ВВЕРХ
@@ -442,6 +469,7 @@ function recalc_coords() {
     let calls = Array(PQvertex_type.length).fill(0);
     for(let curr_layer = bottom_layer, next_layer; curr_layer.length; curr_layer = next_layer) {
         next_layer = [];
+
         for(let v of curr_layer) {
             let p = PQprev[v];
             if( p == -1 ) continue;
@@ -454,11 +482,22 @@ function recalc_coords() {
             PQdraw[p].h  = Math.max(PQdraw[p].h , PQdraw[v].h + 1);
             PQdraw[p].i1 = Math.min(PQdraw[p].i1, PQdraw[v].i1);
             PQdraw[p].i2 = Math.max(PQdraw[p].i2, PQdraw[v].i2);
+
+            is_pertinent_node[p] = Math.max(is_pertinent_node[p], is_pertinent_node[v]);
             
-            if( calls[p] != PQchilds[p].length ) continue;            
+            if( calls[p] != PQchilds[p].length ) continue; 
             
-            // все дети вершины p обработанны
+            // все дети вершины p обработанны -> ДОБАВЛЯЕМ В next_layer
             next_layer.push(p);
+
+            if( is_pertinent_node[p] && pertinent_root == -1 ) {  // если pertinent_tree ещё не законченно
+                pertinent_vertex_order.push(p);
+
+                // проверка может мы дошли до корня?
+                if( PQdraw[p].i1 <= min_pertinent_i1 && max_pertinent_i2 <= PQdraw[p].i2) {
+                    pertinent_root = p;
+                }
+            }
 
             // А. ЦЕНТР МАСС ЛИСТЬЕВ
             PQdraw[p].x = sum[p] / cnt[p];
@@ -469,6 +508,9 @@ function recalc_coords() {
             // PQdraw[p].x /= PQchilds[p].length;
         }
     }
+
+    console.log('от vertex_to_expand=', pertinent_vertex_order, ' pertinent_vertex_order: ', pertinent_vertex_order);
+    for(let prt of pertinent_vertex_order) draw_box(prt, ctx, COLORS.ORANGE);
 }
 
 
@@ -928,20 +970,38 @@ function animate_permutation(i, new_pos_in_childs) {
 // ================================================================================================
 // как сделать все вершины подряд???
 
+
+// самое важное получаем порядок - в котором рассматриваем вершины
 function build_pertinent_tree() {
 
 }
 
 // собираем вершины vertex_to_expand
-let reducing_pos = -1;
+let pertinent_reducing_pos = -1;
 function reducing_step() {
-    if( reducing_pos == -1 ) {
-        reducing_pos = 0;
-        highlighted_up_edges_from = new Map();
+    if( pertinent_reducing_pos >= pertinent_vertex_order.length ) {
+        console.log('ЗАКОЧИЛИСЬ reducing ШАГИ');
+        return;
+    }
+
+    let curr_vertex = pertinent_vertex_order[pertinent_reducing_pos++];
+    console.log('РАССМАТРИВАЕМАЯ pertinent curr_vertex: ', curr_vertex);
+
+    let pertinent_childs = [];
+    for(let nxt of PQchilds[curr_vertex]) {
+        //   pertinent виртуальная вершина
+        if( is_pertinent_node[nxt] ) {
+            pertinent_childs.push(nxt);
+            highlighted_up_edges_from.set(nxt, 1);
+        }
     }
 
 
 
+
+    
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    draw_subtree(0);
 }
 
 
@@ -954,10 +1014,16 @@ let vertex_to_expand = 0;
 function next_vertex_expand() {
     if( vertex_to_expand >= N ) return;
 
+    // press_button_expand();
+    expand(vertex_to_expand);
+    vertex_to_expand++;
+
+
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    recalc_coords();
+    draw_subtree(0);
     
     // for(let i = 0; i < 100; i++) highlighted_up_edges_from.set(i, 1);
-
     // highlighted_up_edges_from.set(1, 1);
     // highlighted_up_edges_from.set(5, 1);
 
@@ -968,20 +1034,12 @@ function next_vertex_expand() {
 
 
 
-    if( vertex_to_expand >= 1 ) {
-        if(to_delete_flag) animate_rotation(1);
-        else if( vertex_to_expand >= 5 )  animate_permutation(5, 4);
-        to_delete_flag ^= 1;
-        // animate_permutation(5, 3);
-    }
-
-    if( vertex_to_expand <= 5) {
-        expand(vertex_to_expand);
-        vertex_to_expand++;
-        
-        recalc_coords();
-        draw_subtree(0);
-    }  
+    // if( vertex_to_expand >= 1 ) {
+    //     if(to_delete_flag) animate_rotation(1);
+    //     else if( vertex_to_expand >= 5 )  animate_permutation(5, 4);
+    //     to_delete_flag ^= 1;
+    //     // animate_permutation(5, 3);
+    // }
 
 }
 
