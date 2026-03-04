@@ -79,8 +79,11 @@ function get_coords(i) {
     return [x_centre, PQdraw[i].y];
 }
 
+// let color_virtual = -1;
 function draw_vertex_label(i, drawed_ctx = ctx) {
     let [x, y] = get_coords(i); // = PQdraw[i].x, y = PQdraw[i].y;
+
+    let extra_info = ' [' + i + ']';
 
     if( PQvertex_type[i] < 0 ) {  // Это Q-node
         let x1 = PQdraw[i].x1, x2 = PQdraw[i].x2, y1 = y-Qnode_HALF_HEIGHT, y2 = y+Qnode_HALF_HEIGHT;
@@ -96,7 +99,6 @@ function draw_vertex_label(i, drawed_ctx = ctx) {
         drawed_ctx.font         = 'bold 10px Arial';
         drawed_ctx.textAlign    = 'center';
         drawed_ctx.textBaseline = 'middle';
-        let extra_info = ' [' + i + ']';
         drawed_ctx.fillText(extra_info, x + 10, y);
         return;
     }
@@ -105,7 +107,9 @@ function draw_vertex_label(i, drawed_ctx = ctx) {
     if( PQvertex_type[i] >= N ) {  // Это виртуальная вершина
         real_vertex -= N;
         let x1 = x-SQUARE_HALF_LENGHT, x2 = x+SQUARE_HALF_LENGHT, y1 = y, y2 = y+2*SQUARE_HALF_LENGHT;
-        drawed_ctx.clearRect(x1, y1, x2-x1, y2-y1);
+        drawed_ctx.fillStyle = (PQvertex_type[i]-N == vertex_to_expand) ? COLORS.VERTEX : 'white';
+        drawed_ctx.fillRect(x1, y1, x2-x1, y2-y1);
+
         draw_earflaps(x1, x2, y1, y2, drawed_ctx, COLORS.VERTEX_SELECTED);
         drawed_ctx.fillStyle    = 'black';
         y += 15 + SQUARE_HALF_LENGHT;
@@ -120,7 +124,6 @@ function draw_vertex_label(i, drawed_ctx = ctx) {
     drawed_ctx.textAlign    = 'center';
     drawed_ctx.textBaseline = 'middle';
     // console.log('print: ', real_vertex);
-    let extra_info = '[' + i + ']';
     drawed_ctx.fillText(REAL_VERTEX_NAME[real_vertex] + extra_info, x, y);
 }
 
@@ -458,12 +461,12 @@ function recalc_coords() {
             next_layer.push(p);
 
             // А. ЦЕНТР МАСС ЛИСТЬЕВ
-            // PQdraw[p].x = sum[p] / cnt[p];
+            PQdraw[p].x = sum[p] / cnt[p];
 
             // Б. СРЕДНЕЕ ОТ СВОИХ ДЕТЕЙ
-            PQdraw[p].x = 0;
-            for(let u of PQchilds[p]) PQdraw[p].x += PQdraw[u].x;
-            PQdraw[p].x /= PQchilds[p].length;
+            // PQdraw[p].x = 0;
+            // for(let u of PQchilds[p]) PQdraw[p].x += PQdraw[u].x;
+            // PQdraw[p].x /= PQchilds[p].length;
         }
     }
 }
@@ -527,6 +530,11 @@ function recurse_mirroring(cur, x_centre) {
     PQdraw[cur].x1 = 2*x_centre - x2;
     PQdraw[cur].x2 = 2*x_centre - x1;
 
+    // зеркалим порядок детей (.... всё таки это вернулось)
+    for(let i1 = 0, i2 = PQchilds[cur].length-1; i1 < i2; i1++, i2--)
+        [PQchilds[cur][i1], PQchilds[cur][i2]] = [PQchilds[cur][i2], PQchilds[cur][i1]];
+    
+    // в принципе не важно в каком порядке эти циклы делать, но так "типо" хвостовая реккурсия будет наверное
     for(let nxt of PQchilds[cur]) recurse_mirroring(nxt, x_centre);
 }
 
@@ -632,11 +640,8 @@ function animate_rotation(i) {
     draw_boxes(i, extra_canvas3.getContext('2d'), COLORS.RED);
 
     // зеркалим bottom_layer
-    let i1 = PQdraw[i].i1, i2 = PQdraw[i].i2;
-    while( i1 < i2 ) {
+    for(let i1 = PQdraw[i].i1, i2 = PQdraw[i].i2; i1 < i2; i1++, i2--) {
         [bottom_layer[i1], bottom_layer[i2]] = [bottom_layer[i2], bottom_layer[i1]];
-        i1++;
-        i2--;
     }
     
     // чё сама анимация?? неее
@@ -652,6 +657,17 @@ function animate_rotation(i) {
 
 let animate_permutation_blck_dx;
 let animate_permutation_vrtx_dx;
+
+// а зачем?? по идеи всё равно можно это не использовать - на следующем шаге будет другое
+// а хотя мы пересчитываем координаты только при доюавлении вершины, так-что это нужно если будут несколько раз подряд всякие изменения делаться
+// блен ещё порядок в bottom_layer надо менять.... <------- !!! ВАЖНО !!!
+function recurse_shift(cur, dx) {
+    PQdraw[cur].x  += dx;
+    PQdraw[cur].x1 += dx;
+    PQdraw[cur].x2 += dx;
+    for(let nxt of PQchilds[cur]) recurse_shift(nxt, dx);
+}
+
 
 // ПРОБЛЕМА - тут зависим от координат рёбер - А ХОТИМ ТОЛЬКО ПО offScreen-ам делать
 function animate_permutation_frame(currT) {
@@ -856,6 +872,9 @@ function animate_permutation(i, new_pos_in_childs) {
     animate_permutation_blck_dx = shift_block_dx;
     animate_permutation_vrtx_dx = shift_vertx_dx;
 
+    for(let j = blck_lft_pos; j <= blck_rht_pos; j++) recurse_shift(layer[j], shift_block_dx);
+    recurse_shift(i, -shift_vertx_dx); // сдвинули "перетаскиваемое" поддерево
+
     
 
     // МЕНЯЕМ ПОРЯДОК  bottom_layer!    
@@ -865,6 +884,9 @@ function animate_permutation(i, new_pos_in_childs) {
     let bj1 = PQdraw[layer[blck_lft_pos]     ].i1, bj2 = PQdraw[layer[blck_rht_pos]     ].i2;
     console.log(`bottom_layer:  [${bi1} : ${bi2}]  <->  [${bj1} : ${bj2}]`)
     array_rearange(bottom_layer, bi1, bi2, bj1, bj2);
+
+    // перестановка детей (.... всё таки это вернулось)
+    array_rearange(layer, cur_pos_in_childs, cur_pos_in_childs, blck_lft_pos, blck_rht_pos);
 
     console.log('AFTER  CHANGE:\n    bottom_layer:', bottom_layer);
 
@@ -881,18 +903,30 @@ function animate_permutation(i, new_pos_in_childs) {
 // ================================================================================================
 // как сделать все вершины подряд???
 
+// собираем вершины vertex_to_expand
+let reducing_pos = -1;
+function reducing_step() {
+    if( reducing_pos == -1 ) {
+        reducing_pos = 0;
+        highlighted_up_edges_from = new Map();
+    }
+
+
+
+}
+
 
 // ================================================================================================
 // КНОПКА [next]
+
+let to_delete_flag = 0;
 
 let vertex_to_expand = 0;
 function next_vertex_expand() {
     if( vertex_to_expand >= N ) return;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    expand(vertex_to_expand);
-
-
+    
     // for(let i = 0; i < 100; i++) highlighted_up_edges_from.set(i, 1);
 
     // highlighted_up_edges_from.set(1, 1);
@@ -904,18 +938,22 @@ function next_vertex_expand() {
 
 
 
-    recalc_coords();
-    draw_subtree(0);
 
     if( vertex_to_expand >= 1 ) {
-        // animate_rotation(1);
-        animate_permutation(5, 3);
+        if(to_delete_flag) animate_rotation(1);
+        else if( vertex_to_expand >= 5 )  animate_permutation(5, 4);
+        to_delete_flag ^= 1;
         // animate_permutation(5, 3);
     }
 
-    // expand(vertex_to_expand);
+    if( vertex_to_expand <= 5) {
+        expand(vertex_to_expand);
+        vertex_to_expand++;
+        
+        recalc_coords();
+        draw_subtree(0);
+    }  
 
-    vertex_to_expand++;
 }
 
 
