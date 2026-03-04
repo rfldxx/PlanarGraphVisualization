@@ -49,7 +49,8 @@ const COLORS = {
     RED: '#da2d2d',
     BLUE: '#2196F3',
     GREEN: '#45a049',
-    ORANGE: '#FF5722'
+    ORANGE: '#FF5722',
+    BROWN: '#804824'
 };
 
 function draw_segment(x1, y1, x2, y2, clr = COLORS.EDGE, ww = 2, drawed_ctx = ctx) {
@@ -203,9 +204,15 @@ function draw_earflaps(x1, x2, y1, y2, drawed_ctx = ctx, clr = COLORS.RED) {
     cnt_rect++;
 }
 
-function draw_box(cur, drawed_ctx = ctx, clr = COLORS.PURPLE) {
+function draw_box(cur, drawed_ctx = ctx, clr = COLORS.PURPLE, msg = '', type_pos = 0) {
     let xx1 = PQdraw[cur].x1, xx2 = PQdraw[cur].x2, yy1 = PQdraw[cur].y, yy2 = yy1 + dY*PQdraw[cur].h;
     draw_earflaps(xx1, xx2, yy1 - VERTEX_RADIUS, yy2 + 30, drawed_ctx, clr);
+    
+    drawed_ctx.font         = '14px Arial';
+    drawed_ctx.textAlign    = 'left';  // теперь x — левая граница
+    drawed_ctx.textBaseline = (type_pos == 0 ) ? 'top' : 'bottom';  // отсчитываем от верхней границы текста
+    drawed_ctx.fillStyle    =   clr ;
+    drawed_ctx.fillText(msg, xx1, (type_pos == 0 ) ? yy2 + 30 + 5 : yy1 - VERTEX_RADIUS); // левый верхний угол
 }
 
 function draw_boxes(cur, drawed_ctx = ctx, clr = COLORS.PURPLE) {
@@ -259,7 +266,8 @@ let PQvertex_type = [];
 let PQchilds      = [];
 let PQprev        = [];
 
-let is_pertinent_node = [];
+let is_pertinent_node   = [];
+let pertinent_tree_info = [];
 
 let PQroot = 0;
 
@@ -267,22 +275,24 @@ let PQdraw        = [];  // {x, y, x1, x2, h, i1, i2} x,y - координаты
 // ! вершина получает свою y координату при первом добавлении в PQtree
 
 function restartPQ() {
-    PQvertex_type     = [];
-    PQchilds          = [];
-    PQprev            = [];
-    is_pertinent_node = [];
-    PQdraw            = [];
+    PQvertex_type       = [];
+    PQchilds            = [];
+    PQprev              = [];
+    is_pertinent_node   = [];
+    pertinent_tree_info = [];
+    PQdraw              = [];
 }
 
 function newPQnode(type, prev, childs = []) {  // , childs??
     // if( PQfree_pos.length != 0 ) return PQfree_pos.pop();
 
     // надо создавать новую позицию в "массиве" хранящем PQ_tree
-    PQvertex_type    .push(type);
-    PQchilds         .push(childs);
-    PQprev           .push(prev);
-    is_pertinent_node.push(0);
-    PQdraw           .push({x: 10, y: (prev != -1 ? PQdraw[prev].y : 0) + dY, x1: canvas.width, x2: -1, h: 0, i1: -1, i2: -1});
+    PQvertex_type      .push(type);
+    PQchilds           .push(childs);
+    PQprev             .push(prev);
+    is_pertinent_node  .push(0);
+    pertinent_tree_info.push({is_full: 0, is_left_fulled: 0})
+    PQdraw             .push({x: 10, y: (prev != -1 ? PQdraw[prev].y : 0) + dY, x1: canvas.width, x2: -1, h: 0, i1: -1, i2: -1});
     return PQvertex_type.length - 1;
 }
 
@@ -307,7 +317,10 @@ function st_Numbering(edges) {
     return edges;
 }
 
+
+let is_input_data_readed = 0;
 function tree_read() {
+    is_input_data_readed = 1;
     highlighted_up_edges_from = new Map();
 
     restartREAL();
@@ -437,7 +450,9 @@ function recalc_coords() {
         PQdraw[i].i1 = bottom_layer.length;
         PQdraw[i].i2 = -1;
 
-        is_pertinent_node[i] = 0;
+        is_pertinent_node   [i] = 0;
+        pertinent_tree_info[i].is_full        = 0;
+        pertinent_tree_info[i].is_left_fulled = 0;
     }
 
     // 1. ПОДСЧЁТ ДЛЯ ЛИСТЬЕВ
@@ -454,7 +469,10 @@ function recalc_coords() {
 
         // pertinent виртуальная вершина
         if( PQvertex_type[v]-N == vertex_to_expand ) {
-            is_pertinent_node[v] = 1;
+            is_pertinent_node  [v] = 1;
+            pertinent_tree_info[v].is_full        = 1;
+            pertinent_tree_info[v].is_left_fulled = 1;
+            
             min_pertinent_i1 = Math.min(min_pertinent_i1, i);
             max_pertinent_i2 = Math.max(max_pertinent_i2, i);
         }
@@ -509,8 +527,10 @@ function recalc_coords() {
         }
     }
 
+    // рисуем pertinent tree
     console.log('от vertex_to_expand=', pertinent_vertex_order, ' pertinent_vertex_order: ', pertinent_vertex_order);
     for(let prt of pertinent_vertex_order) draw_box(prt, ctx, COLORS.ORANGE);
+    if( pertinent_root != -1 ) draw_box(pertinent_root, ctx, COLORS.ORANGE, 'pertinent дерево');
 }
 
 
@@ -972,36 +992,145 @@ function animate_permutation(i, new_pos_in_childs) {
 
 
 // самое важное получаем порядок - в котором рассматриваем вершины
-function build_pertinent_tree() {
+// function build_pertinent_tree() {
 
-}
+// }
 
 // собираем вершины vertex_to_expand
 let pertinent_reducing_pos = -1;
 function reducing_step() {
+    if( !is_input_data_readed ) {
+        console.log('НЕТ ДАННЫХ');
+        console.log('  => запускаем next_vertex_expand()');
+        next_vertex_expand();
+        return;
+    }
+
     if( pertinent_reducing_pos >= pertinent_vertex_order.length ) {
         console.log('ЗАКОЧИЛИСЬ reducing ШАГИ');
+        console.log('  => запускаем next_vertex_expand()');
+        next_vertex_expand();
         return;
     }
 
     let curr_vertex = pertinent_vertex_order[pertinent_reducing_pos++];
     console.log('РАССМАТРИВАЕМАЯ pertinent curr_vertex: ', curr_vertex);
 
-    let pertinent_childs = [];
+
+    
+    // pertinent_tree_info[i].is_full        = 0;
+    // pertinent_tree_info[i].is_left_fulled = 0;
+    
+    let is_full = 1;
+    let pertinent_childs = [];  // хранятся именно номера "PQtree[i]"
+
+
+    // выделяем (highlighting) нужные рёбра
     for(let nxt of PQchilds[curr_vertex]) {
         //   pertinent виртуальная вершина
         if( is_pertinent_node[nxt] ) {
             pertinent_childs.push(nxt);
             highlighted_up_edges_from.set(nxt, 1);
+            
+            if( !pertinent_tree_info[nxt].is_full ) is_full = 0;
+        } else {
+            is_full = 0;
         }
     }
 
 
-
-
-    
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     draw_subtree(0);
+    draw_box(curr_vertex, ctx, COLORS.PURPLE, 'рассматриваемое pertinent поддерево');
+
+
+    // ЭКСТРЕМАЛЬНЫЕ СЛУЧАИ ПОДДЕРЕВЬЕВ
+    //  1. есть > 2 детей, которые только  only_lefted_fulled
+    //  2. есть pertinent поддерево, которое не lefted_fulled
+    let only_lefted_fulled_i1 = -1, only_lefted_fulled_i2 = -1;  // позиции в масиве PQchilds[curr_vertex]
+    let is_exist_isolated = 0, is_more_than_2_lefted_fulled = 0;
+    {   // айй, спамим код
+        for(let i in PQchilds[curr_vertex]) {
+            let nxt = PQchilds[curr_vertex][i];
+            if( !is_pertinent_node[nxt] ) continue;
+            
+            if( !pertinent_tree_info[nxt].is_left_fulled ) {  // изолированная вершина
+                is_exist_isolated = 1;
+                draw_box(nxt, ctx, COLORS.RED, '"изолировано"', 1);
+                continue;  // <- возможно "коварный" continue - не знаю оставить или убрать
+            }
+
+            if( !pertinent_tree_info[nxt].is_full ) {  // only_lefted_fulled
+                     if( only_lefted_fulled_i1 == -1 ) only_lefted_fulled_i1 = i;
+                else if( only_lefted_fulled_i2 == -1 ) only_lefted_fulled_i2 = i;
+                else {  // > 2 детей, которые только  only_lefted_fulled
+                    is_more_than_2_lefted_fulled = i;
+                    draw_box(nxt, ctx, COLORS.BROWN, '"частично заполнено"', 1);
+                }
+            }
+        }   
+    }
+    if( is_exist_isolated ) {  // ГРАФ НЕ ПЛАНАРНЫЙ!
+        alert('ГРАФ НЕ ПЛАНАРНЫЙ!\n[ОШИБКА:] Не допустим потомок в виде изолированного pertinent-поддерева!');
+    }
+    if( is_more_than_2_lefted_fulled ) {  // ГРАФ НЕ ПЛАНАРНЫЙ!
+        alert('ГРАФ НЕ ПЛАНАРНЫЙ!\n[ОШИБКА:] Должно быть не более двух частично заполненых потомков!');
+    }
+
+
+    // ИДЕИ (впрочем очевидные):
+    //      * всплытие уведомлений если в вершине оказалась проблема (с описанием) 
+    //      * если в самом конце всё хорошо - то тоже уведомить (вот бы туда хлопающих людей из евангелиона)
+    //      * рисовать корбки для разных поддеревьев (в зависимости от: is_full - зелённая, is_left_fulled - серая, иначе - красная/оранжевая/фиолетовая)
+
+
+
+    // РАЗНЫЕ ДЕЙСТВИЯ В ЗАВИСИМОСТИ ОТ ТОГО КАКОГО ТИПА ВЕРШИНА (Q-node или P-node)
+    if( PQvertex_type[curr_vertex] < 0 ) {  // Q-node
+        let is_all_pertinent_subtree_consistent = 1;
+        let is_partial_subtree_on_borders = 1;
+        {   // проверка что все pertinent_subtree идут подряд
+            let start = 0;
+            while( !is_pertinent_node[PQchilds[curr_vertex][start]] ) start++;
+            let end   = start+1, l = PQchilds[curr_vertex].length;
+            while( end < l && is_pertinent_node[PQchilds[curr_vertex][end]] ) end++;
+            let cnt = end - start;
+
+            // проверка что все pertinent_subtree идут подряд
+            if( cnt != pertinent_childs.length ) {
+                is_all_pertinent_subtree_consistent = 0;;
+                draw_box(pertinent_childs[cnt], ctx, COLORS.BROWN, '"не подряд"', 1);
+            }
+
+            // проверка что частично заполненные поддеревья находятся только на краях
+            if( only_lefted_fulled_i1 != -1 ) {
+                let i = only_lefted_fulled_i1;
+                if( i != start && i != end-1 ) {
+                    is_partial_subtree_on_borders = 0;
+                    draw_box(PQchilds[curr_vertex][i], ctx, COLORS.BROWN, '"не на краю"', 1);
+                }
+            }
+            if( only_lefted_fulled_i2 != -1 ) {
+                let i = only_lefted_fulled_i2;
+                if( i != start && i != end-1 ) {
+                    is_partial_subtree_on_borders = 0;
+                    draw_box(PQchilds[curr_vertex][i], ctx, COLORS.BROWN, '"не на краю"', 1);
+                }
+            }
+        }
+        // is_all_pertinent_subtree_consistent = 0;
+        if( !is_all_pertinent_subtree_consistent ) {  // ГРАФ НЕ ПЛАНАРНЫЙ!
+            alert('ГРАФ НЕ ПЛАНАРНЫЙ!\n[ОШИБКА:] [требование Q-node:] все поддеревья, содержащие pertinent-вершины, должны идти подряд!');
+        }
+        // is_partial_subtree_on_borders = 0;
+        if( !is_partial_subtree_on_borders ) {  // ГРАФ НЕ ПЛАНАРНЫЙ!
+            alert('ГРАФ НЕ ПЛАНАРНЫЙ!\n[ОШИБКА:] [требование Q-node:] частично заполненные поддервья должны располагаться только на краях последовательного промежутка pertinent-детей!');
+        }
+        
+
+    }
+
+    
 }
 
 
@@ -1012,6 +1141,11 @@ let to_delete_flag = 0;
 
 let vertex_to_expand = 0;
 function next_vertex_expand() {
+    if( !is_input_data_readed ) {
+        tree_read();
+        return;
+    }
+
     if( vertex_to_expand >= N ) return;
 
     // press_button_expand();
