@@ -787,6 +787,28 @@ function array_rearange(a, i1, i2, j1, j2) {
     for(let e of left_part)       a[i++] = e; 
 }
 
+// конечно бы лучше как array_rearange(a, i1, i2, j1, j2) сделать
+// но дедлайн вообще близко - лучше не думать лишний раз...
+function up_layer_fix_i1i2(layer, cur_pos_in_childs, blck_lft_pos, blck_rht_pos) {
+    let cur_pos_len = PQdraw[layer[cur_pos_in_childs]].i2 - PQdraw[layer[cur_pos_in_childs]].i1 + 1;
+
+    if( cur_pos_in_childs < blck_lft_pos ) {
+        for(let i = blck_lft_pos; i <= blck_rht_pos; i++) {
+            PQdraw[layer[i]].i1 -= cur_pos_len;
+            PQdraw[layer[i]].i2 -= cur_pos_len;
+        }
+        PQdraw[layer[cur_pos_in_childs]].i1 = PQdraw[layer[blck_rht_pos]].i2 + 1;
+    } else {
+        PQdraw[layer[cur_pos_in_childs]].i1 = PQdraw[layer[blck_lft_pos]].i1;
+        for(let i = blck_lft_pos; i <= blck_rht_pos; i++) {
+            PQdraw[layer[i]].i1 += cur_pos_len;
+            PQdraw[layer[i]].i2 += cur_pos_len;
+        }
+    }
+
+    PQdraw[layer[cur_pos_in_childs]].i2 = PQdraw[layer[cur_pos_in_childs]].i1 + cur_pos_len - 1;
+}
+
 // переставляем "PQtree"[i] в позицию new_pos_in_childs своего предка
 function animate_permutation(i, new_pos_in_childs) {
     let parent = PQprev[i];
@@ -882,6 +904,9 @@ function animate_permutation(i, new_pos_in_childs) {
 
     let bi1 = PQdraw[layer[cur_pos_in_childs]].i1, bi2 = PQdraw[layer[cur_pos_in_childs]].i2;
     let bj1 = PQdraw[layer[blck_lft_pos]     ].i1, bj2 = PQdraw[layer[blck_rht_pos]     ].i2;
+    // !!! ПОДДЕРЖИВАЕМ .i1 .i2 только для "верхних" детей 
+    up_layer_fix_i1i2(layer, cur_pos_in_childs, blck_lft_pos, blck_rht_pos);
+
     console.log(`bottom_layer:  [${bi1} : ${bi2}]  <->  [${bj1} : ${bj2}]`)
     array_rearange(bottom_layer, bi1, bi2, bj1, bj2);
 
@@ -902,6 +927,10 @@ function animate_permutation(i, new_pos_in_childs) {
 
 // ================================================================================================
 // как сделать все вершины подряд???
+
+function build_pertinent_tree() {
+
+}
 
 // собираем вершины vertex_to_expand
 let reducing_pos = -1;
