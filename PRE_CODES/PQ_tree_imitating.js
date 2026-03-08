@@ -415,7 +415,7 @@ function expand(real_vertex) {
         first_mention = 0;
 
         // PQvertex_type[u] -= N;  // сделали P-node
-        PQvertex_type[u] = (Math.random() < 0.5 ? -1 : PQvertex_type[u]-N);
+        PQvertex_type[u] = (Math.random() < -0.5 ? -1 : PQvertex_type[u]-N);
         for(let chld of REAL_GRAPH_CHILDS[real_vertex]) PQchilds[u].push( newPQnode(N + chld, u) );
         new_bottom_layer.push(...PQchilds[u]);
     }
@@ -529,6 +529,8 @@ function recalc_coords() {
 
     // рисуем pertinent tree
     console.log('от vertex_to_expand=', pertinent_vertex_order, ' pertinent_vertex_order: ', pertinent_vertex_order);
+    
+    console.log('КОРЕННЬ pertinent tree: ', pertinent_root);
     for(let prt of pertinent_vertex_order) draw_box(prt, ctx, COLORS.ORANGE);
     if( pertinent_root != -1 ) draw_box(pertinent_root, ctx, COLORS.ORANGE, 'pertinent дерево');
 }
@@ -539,6 +541,8 @@ function recalc_coords() {
 
 function draw_subtree(cur, excepted_branch = -1, draw_ctx = ctx) {
     if( cur == excepted_branch ) return;
+
+    if(PQchilds[cur].length) console.log(cur, ' : ', PQchilds[cur], ' (childs)');
 
     for(let nxt of PQchilds[cur]) {
         if( nxt == excepted_branch ) continue;  // ай, сам знаю кринж - два сравнения с excepted_branch, но чет неочев как делать из-за рисования ребра
@@ -571,7 +575,7 @@ function push_back_to_history() {
 // ================================================================================================
 // СТРОИМ ВИРТУАЛЬНЫЕ canvas-ы  <<<ДЛЯ АНИМАЦИИ>>> (общее для обоих анимаций)
 // СДЕЛАТЬ БЫ AnimeTime завищищем от кол-ва участвующих в анимации вершин
-let AnimeTime = 2000;
+let AnimeTime = 200;
 let extra_canvas1, extra_canvas2, extra_canvas3, extra_canvas4;
 let animation_parent_x, animation_parent_y;
 let animation_edge_to = [];  // {x, y, is_highlighted} - запрос на ребро к этой вершине от animation_parent
@@ -704,6 +708,7 @@ function animate_rotation(i) {
     draw_boxes(i, extra_canvas3.getContext('2d'), COLORS.RED);
 
     // зеркалим bottom_layer
+    console.log("MIRRORING: [", PQdraw[i].i1, ' ', PQdraw[i].i2, ']')
     for(let i1 = PQdraw[i].i1, i2 = PQdraw[i].i2; i1 < i2; i1++, i2--) {
         [bottom_layer[i1], bottom_layer[i2]] = [bottom_layer[i2], bottom_layer[i1]];
     }
@@ -854,23 +859,32 @@ function array_rearange(a, i1, i2, j1, j2) {
 // конечно бы лучше как array_rearange(a, i1, i2, j1, j2) сделать
 // но дедлайн вообще близко - лучше не думать лишний раз...
 function up_layer_fix_i1i2(layer, cur_pos_in_childs, blck_lft_pos, blck_rht_pos) {
+    let a = PQdraw[layer[cur_pos_in_childs]].i1, b = PQdraw[layer[cur_pos_in_childs]].i2;
+
     let cur_pos_len = PQdraw[layer[cur_pos_in_childs]].i2 - PQdraw[layer[cur_pos_in_childs]].i1 + 1;
+
+    console.log("LAYER FIX!!!!! args: ", cur_pos_in_childs, ' ', blck_lft_pos, ' ', blck_rht_pos);
 
     if( cur_pos_in_childs < blck_lft_pos ) {
         for(let i = blck_lft_pos; i <= blck_rht_pos; i++) {
+            console.log(`      ${layer[i]} : [${PQdraw[layer[i]].i1}, ${PQdraw[layer[i]].i2}]  -> [${PQdraw[layer[i]].i1-cur_pos_len}, ${PQdraw[layer[i]].i2-cur_pos_len}]`)
             PQdraw[layer[i]].i1 -= cur_pos_len;
             PQdraw[layer[i]].i2 -= cur_pos_len;
         }
         PQdraw[layer[cur_pos_in_childs]].i1 = PQdraw[layer[blck_rht_pos]].i2 + 1;
-    } else {
+    } else if( blck_rht_pos < cur_pos_in_childs  ) {
         PQdraw[layer[cur_pos_in_childs]].i1 = PQdraw[layer[blck_lft_pos]].i1;
         for(let i = blck_lft_pos; i <= blck_rht_pos; i++) {
+            console.log(`      ${layer[i]} : [${PQdraw[layer[i]].i1}, ${PQdraw[layer[i]].i2}]  -> [${PQdraw[layer[i]].i1+cur_pos_len}, ${PQdraw[layer[i]].i2+cur_pos_len}]`)
+            
             PQdraw[layer[i]].i1 += cur_pos_len;
             PQdraw[layer[i]].i2 += cur_pos_len;
         }
     }
-
+    
     PQdraw[layer[cur_pos_in_childs]].i2 = PQdraw[layer[cur_pos_in_childs]].i1 + cur_pos_len - 1;
+    console.log(`      ${layer[cur_pos_in_childs]} : [${a}, ${b}] -> [${PQdraw[layer[cur_pos_in_childs]].i1}, ${PQdraw[layer[cur_pos_in_childs]].i2}]`);
+    console.log("END FIX!!!!!");
 }
 
 // переставляем "PQtree"[i] в позицию new_pos_in_childs своего предка
@@ -963,7 +977,7 @@ function animate_permutation(i, new_pos_in_childs) {
 
     
 
-    // МЕНЯЕМ ПОРЯДОК  bottom_layer!    
+    // МЕНЯЕМ ПОРЯДОК  bottom_layer!
     console.log('BEFORE CHANGE:\n    bottom_layer:', bottom_layer);
 
     let bi1 = PQdraw[layer[cur_pos_in_childs]].i1, bi2 = PQdraw[layer[cur_pos_in_childs]].i2;
@@ -972,9 +986,10 @@ function animate_permutation(i, new_pos_in_childs) {
     up_layer_fix_i1i2(layer, cur_pos_in_childs, blck_lft_pos, blck_rht_pos);
 
     console.log(`bottom_layer:  [${bi1} : ${bi2}]  <->  [${bj1} : ${bj2}]`)
+    
     array_rearange(bottom_layer, bi1, bi2, bj1, bj2);
 
-    // перестановка детей (.... всё таки это вернулось)
+    // ПЕРЕСТАНОВКА ДЕТЕЙ (.... всё таки это вернулось)
     array_rearange(layer, cur_pos_in_childs, cur_pos_in_childs, blck_lft_pos, blck_rht_pos);
 
     console.log('AFTER  CHANGE:\n    bottom_layer:', bottom_layer);
@@ -1021,6 +1036,8 @@ function reducing_step() {
 
     // выполняем забронированные шаги (ппхпхп, аля нынче часто поподающееся у меня в рекомендациях: технический долг)
     if( pos_in_booked < booked_order_reducing_move.length ) {
+        
+
         console.log("BOOKED: ", booked_order_reducing_move);
 
         let type   = booked_order_reducing_move[pos_in_booked][0];
@@ -1030,9 +1047,23 @@ function reducing_step() {
         if( type == 0 ) animate_rotation(vertex);
         else {
             let new_pos = booked_order_reducing_move[pos_in_booked][2];
+            
+            // иначе не надо переставлять!
+            let pos_in_childs = 0, parent = PQprev[vertex];
+            while( PQchilds[parent][pos_in_childs] != vertex ) pos_in_childs++;
+            if( pos_in_childs == new_pos ) {
+                // АХАХАХАХАХХААХХАХА ВАПХПААХПАХПХ
+                pos_in_booked++;
+                console.log('АДСКИЙ АД');
+                reducing_step();  // <- ПОМОЕМУ ЭТО АД АДСКИЙ, АПХАХАХАХА, ВА-ха-ха
+                return;
+            }
+
+            console.log('[booking]: move vertex [', vertex, '] to pos in parent: ', new_pos);
             animate_permutation(vertex, new_pos);
         }
 
+        console.log('!!!! AFTER REDUCTION:\nbottom_layer: ', bottom_layer);
         pos_in_booked++;
         return;
     }
@@ -1200,7 +1231,7 @@ function reducing_step() {
         
         // рил, гениально, это же обязательно всегда надо сделать
         if( pos_i1_in_fragment == 0 ) booked_order_reducing_move.push( [0, PQchilds[curr_vertex][only_lefted_fulled_i1]] ); 
-            
+        
         // ничего для будующего не сделаешь - curr_vertex в любом случае будет частичным\
         if( is_left_blanked && is_right_blanked ) return;
         
@@ -1218,7 +1249,42 @@ function reducing_step() {
         return;
     }
 
-    
+
+
+    // * упростить поведение в pertinent_root (А надо? как будто тогда будут "загадочно" выглядить действия)
+    if( curr_vertex == pertinent_root && pertinent_childs.length == 1 ) {
+        console.log("  [ранний выход: вершина корень]: только один ребёнок")    
+        return;  // ну это точно надо
+    }
+
+
+    // * неделать лишние действия 
+
+    // это P-node
+    let pos_to_place_in_childs = 0;
+
+    if( only_lefted_fulled_i2 != -1 ) {
+        [only_lefted_fulled_i1, only_lefted_fulled_i2] = [only_lefted_fulled_i2, only_lefted_fulled_i1];
+
+        pertinent_tree_info[curr_vertex].is_left_fulled = 0;        
+        booked_order_reducing_move.push( [1, PQchilds[curr_vertex][only_lefted_fulled_i2], pos_to_place_in_childs] ); 
+        booked_order_reducing_move.push( [0, PQchilds[curr_vertex][only_lefted_fulled_i2]] ); 
+        pos_to_place_in_childs++;
+    } else {
+        pertinent_tree_info[curr_vertex].is_left_fulled = 1;
+    }
+
+    for(let e of pertinent_childs) {
+        if( e == PQchilds[curr_vertex][only_lefted_fulled_i1] || e == PQchilds[curr_vertex][only_lefted_fulled_i2] ) continue;
+        booked_order_reducing_move.push( [1, e, pos_to_place_in_childs] );
+        pos_to_place_in_childs++;
+    }
+
+    if( only_lefted_fulled_i1 != -1 ) {
+        booked_order_reducing_move.push( [1, PQchilds[curr_vertex][only_lefted_fulled_i1], pos_to_place_in_childs] );
+        pos_to_place_in_childs++;
+    }
+
 }
 
 
