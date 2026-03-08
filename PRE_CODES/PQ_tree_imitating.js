@@ -267,7 +267,7 @@ let PQchilds      = [];
 let PQprev        = [];
 
 let is_pertinent_node   = [];
-let pertinent_tree_info = [];
+let pertinent_tree_info = []; // {is_full, is_left_fulled}
 
 let PQroot = 0;
 
@@ -674,6 +674,8 @@ function animate_rotation(i) {
     if( i != 0 ) {
         // если parent - это Qnode, то все ребра вертикальное - будем кодировать  animation_parent_x == -1
         let parent = PQprev[i];
+
+        console.log("TRY parent:", parent, " for vertex ", i);
         [animation_parent_x, animation_parent_y] = get_coords(parent);
         if(PQvertex_type[parent] < 0) animation_parent_x = -1
     
@@ -997,14 +999,50 @@ function animate_permutation(i, new_pos_in_childs) {
 // }
 
 // собираем вершины vertex_to_expand
+
+
+let pos_in_booked = 0;
+let booked_order_reducing_move = [];  // [type, args..] - тупо в виде массива
+
+
 let pertinent_reducing_pos = -1;
+
+// ?!! У нас обязательно потомки должны быть LEFT_FULLED !!!  -  можно через поддержание этого сделать
 function reducing_step() {
     if( !is_input_data_readed ) {
         console.log('НЕТ ДАННЫХ');
         console.log('  => запускаем next_vertex_expand()');
         next_vertex_expand();
+
+        pos_in_booked              =  0;
+        booked_order_reducing_move = [];
         return;
     }
+
+    // выполняем забронированные шаги (ппхпхп, аля нынче часто поподающееся у меня в рекомендациях: технический долг)
+    if( pos_in_booked < booked_order_reducing_move.length ) {
+        console.log("BOOKED: ", booked_order_reducing_move);
+
+        let type   = booked_order_reducing_move[pos_in_booked][0];
+        let vertex = booked_order_reducing_move[pos_in_booked][1];
+        
+        //  type == 0  -  значит разворот
+        if( type == 0 ) animate_rotation(vertex);
+        else {
+            let new_pos = booked_order_reducing_move[pos_in_booked][2];
+            animate_permutation(vertex, new_pos);
+        }
+
+        pos_in_booked++;
+        return;
+    }
+
+    
+    // НАКОНЕЦ ПЕРЕХОДИМ К ОБРАБОТКЕ pertinent subtree
+    pos_in_booked              =  0;
+    booked_order_reducing_move = [];
+
+
 
     if( pertinent_reducing_pos >= pertinent_vertex_order.length ) {
         console.log('ЗАКОЧИЛИСЬ reducing ШАГИ');
@@ -1024,6 +1062,7 @@ function reducing_step() {
     let is_full = 1;
     let pertinent_childs = [];  // хранятся именно номера "PQtree[i]"
 
+    let is_occured_blank_childs = 0;
 
     // выделяем (highlighting) нужные рёбра
     for(let nxt of PQchilds[curr_vertex]) {
@@ -1035,6 +1074,7 @@ function reducing_step() {
             if( !pertinent_tree_info[nxt].is_full ) is_full = 0;
         } else {
             is_full = 0;
+            is_occured_blank_childs = 1;
         }
     }
 
@@ -1043,6 +1083,16 @@ function reducing_step() {
     draw_subtree(0);
     draw_box(curr_vertex, ctx, COLORS.PURPLE, 'рассматриваемое pertinent поддерево');
 
+
+    // ЕСЛИ НАШЕ ДЕРЕВО ПОЛНОЕ  =>  ТО НИЧЕГО ДЕЛАТЬ НЕ НАДО!
+    if( is_full ) {
+        pertinent_tree_info[curr_vertex].is_full        = 1;
+        pertinent_tree_info[curr_vertex].is_left_fulled = 1;
+
+        return;
+    }
+
+    pertinent_tree_info[curr_vertex].is_full = 0;
 
     // ЭКСТРЕМАЛЬНЫЕ СЛУЧАИ ПОДДЕРЕВЬЕВ
     //  1. есть > 2 детей, которые только  only_lefted_fulled
@@ -1082,7 +1132,8 @@ function reducing_step() {
     //      * всплытие уведомлений если в вершине оказалась проблема (с описанием) 
     //      * если в самом конце всё хорошо - то тоже уведомить (вот бы туда хлопающих людей из евангелиона)
     //      * рисовать корбки для разных поддеревьев (в зависимости от: is_full - зелённая, is_left_fulled - серая, иначе - красная/оранжевая/фиолетовая)
-
+    // 
+    //      * подниматься по pertinent tree сразу к следующему маесту пересечения "цепей"
 
 
     // РАЗНЫЕ ДЕЙСТВИЯ В ЗАВИСИМОСТИ ОТ ТОГО КАКОГО ТИПА ВЕРШИНА (Q-node или P-node)
@@ -1128,6 +1179,41 @@ function reducing_step() {
         }
         
 
+        // в Q-node особо ничего не можем сделать
+        pertinent_tree_info[curr_vertex].is_left_fulled = 0;  // начинаем с этого как по умолчанию (по идеи уже до этого так можно закомиттить эту сторку)
+
+        if( only_lefted_fulled_i2 != -1 ) {  // два частичных ребёнка -> это дерево будет частинчым в любом случае
+            booked_order_reducing_move.push( [0, PQchilds[curr_vertex][only_lefted_fulled_i2]] );
+            return;
+        }
+        
+        // Есть пустые поддеревья - делаем, чтобы они были с правого края
+        // с каких краёв есть пустые поддеревья
+        let  is_left_blanked = (pertinent_childs[0] != PQchilds[curr_vertex][0]);
+        let is_right_blanked = (pertinent_childs[pertinent_childs.length-1] != PQchilds[curr_vertex][PQchilds[curr_vertex].length-1]);
+
+        let pos_i1_in_fragment = -1;
+        // -1 - нет only_lefted_fulled_i1
+        //  1 - является  концом фрагмента
+        //  0 - является началом фрагмента и при этом не является концом
+        if( only_lefted_fulled_i1 != -1 ) pos_i1_in_fragment = ( PQchilds[curr_vertex][only_lefted_fulled_i1] == pertinent_childs[pertinent_childs.length-1] );
+        
+        // рил, гениально, это же обязательно всегда надо сделать
+        if( pos_i1_in_fragment == 0 ) booked_order_reducing_move.push( [0, PQchilds[curr_vertex][only_lefted_fulled_i1]] ); 
+            
+        // ничего для будующего не сделаешь - curr_vertex в любом случае будет частичным\
+        if( is_left_blanked && is_right_blanked ) return;
+        
+        if( pos_i1_in_fragment == -1 ) pertinent_tree_info[curr_vertex].is_left_fulled = 1;
+        
+        // давайте простое заифаем лол (че я столько думал на этим)
+
+        // случаи когда curr_vertex в любом случае получается частичным\
+        if( (pos_i1_in_fragment == 1) &&  is_left_blanked && pertinent_childs.length > 1 ) return;
+        if( (pos_i1_in_fragment == 0) && is_right_blanked ) return;
+
+        if( is_left_blanked || (pos_i1_in_fragment == 0) ) booked_order_reducing_move.push( [0, curr_vertex] ); 
+        return;
     }
 
     
@@ -1226,6 +1312,7 @@ function one_step_drawing(direction = +1) {
         push_back_to_history();
         return;
     }
+
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
