@@ -1204,13 +1204,15 @@ function reducing_step() {
         // ничего для будующего не сделаешь - curr_vertex в любом случае будет частичным\
         if( is_left_blanked && is_right_blanked ) return;
         
-        if( pos_i1_in_fragment == -1 ) pertinent_tree_info[curr_vertex].is_left_fulled = 1;
-        
         // давайте простое заифаем лол (че я столько думал на этим)
 
         // случаи когда curr_vertex в любом случае получается частичным\
-        if( (pos_i1_in_fragment == 1) &&  is_left_blanked && pertinent_childs.length > 1 ) return;
+        if( (pos_i1_in_fragment == 1) &&  is_left_blanked && pertinent_childs.length >  1 ) return;
+        if( (pos_i1_in_fragment == 1) &&  is_left_blanked && pertinent_childs.length == 1 ) booked_order_reducing_move.push( [0, PQchilds[curr_vertex][only_lefted_fulled_i1]] );
+
         if( (pos_i1_in_fragment == 0) && is_right_blanked ) return;
+
+        pertinent_tree_info[curr_vertex].is_left_fulled = 1;
 
         if( is_left_blanked || (pos_i1_in_fragment == 0) ) booked_order_reducing_move.push( [0, curr_vertex] ); 
         return;
