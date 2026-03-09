@@ -137,10 +137,10 @@ function draw_vertex_label(i, drawed_ctx = ctx) {
     if( PQvertex_type[i] >= N ) {  // Это виртуальная вершина
         real_vertex -= N;
         let x1 = x-SQUARE_HALF_LENGHT, x2 = x+SQUARE_HALF_LENGHT, y1 = y, y2 = y+2*SQUARE_HALF_LENGHT;
-        drawed_ctx.fillStyle = (PQvertex_type[i]-N == vertex_to_expand) ? COLORS.VIRTUAL_VERTEX_TO_MERGE : 'white';
+        drawed_ctx.fillStyle = (PQvertex_type[i]-N == COLLECTED_VERTEX) ? COLORS.VIRTUAL_VERTEX_TO_MERGE : 'white';
         drawed_ctx.fillRect(x1, y1, x2-x1, y2-y1);
 
-        draw_earflaps(x1, x2, y1, y2, drawed_ctx, (PQvertex_type[i]-N == vertex_to_expand) ? COLORS.VIRTUAL_VERTEX_TO_MERGE : COLORS.BLUE);
+        draw_earflaps(x1, x2, y1, y2, drawed_ctx, (PQvertex_type[i]-N == COLLECTED_VERTEX) ? COLORS.VIRTUAL_VERTEX_TO_MERGE : COLORS.BLUE);
         drawed_ctx.fillStyle    = 'black';
         y += 15 + SQUARE_HALF_LENGHT;
     } else {                      // Это P-node
@@ -347,6 +347,9 @@ function st_Numbering(edges) {
 }
 
 
+let EXPAND_ORDER_POS = 0;
+let EXPAND_ORDER = [];
+
 let is_input_data_readed = 0;
 function tree_read() {
     is_input_data_readed = 1;
@@ -369,86 +372,38 @@ function tree_read() {
     // ПОКА ПРЕДПОЛАГАЕМ ТАК
     // PQroot = str_to_indx.get(input[0]);
 
-
     N = REAL_VERTEX_NAME.length;
+    EXPAND_ORDER = [];
+    EXPAND_ORDER_POS = 0;
+    for(let i = 0; i < N; i++) EXPAND_ORDER.push(i);
 
-
-    console.log(REAL_VERTEX_NAME );
-    console.log(REAL_GRAPH_CHILDS);
-
-
-    // "Первое" построение PQ-дерева
-    newPQnode(N, -1);
-    bottom_layer = [0];
-
-    vertex_to_expand = 0;
-    recalc_coords();
-    draw_subtree(0);
-    // next_vertex_expand();
-    return;
-
-
-
-    expand(0);
-    expand(1);
-    expand(2);
-    expand(3);
-    expand(4);
-
-    // expand(5);
-
-    let bl = [...bottom_layer];
-    for(let i in bl) bl[i] -= N;
-    console.log('bl: ', bl);
-
-    // expand(6);
-    // expand(7);
-    // expand(8);
-
-
-
-    recalc_coords();
-    draw_subtree(0);
-    // animate_rotation(1);
-
-    // draw_boxes(0);
-
-    
-    console.log('PQdraw : ', PQdraw);
-
-
-    console.log('PQchilds[1] : ', PQchilds[1]);
-
-    // animate_rotation(1);
-    animate_permutation(5, 3);
+    console.log('REAL_VERTEX_NAME:  ', REAL_VERTEX_NAME );
+    console.log('REAL_GRAPH_CHILDS: ', REAL_GRAPH_CHILDS);
+    console.log('EXPAND_ORDER:      ', EXPAND_ORDER     );
 }
 
 // ================================================================================================
 // [ ПРЕВРАЩАЕМ ВИРТУАЛЬНУЮ ВЕРШИНУ В РЕАЛЬНЫЙ УЗЕЛ ]
+// МЕНЯЕТ bottom layer
+// У НАС ДОЛЖНА БЫТЬ ТОЛЬКО ОДНА real_vertex (СЧИТАЕМ ЧТО МЫ ПЕРЕДЕЛАЛИ ВИРТУАЛЬНУЮ ВЕРШИНУ В real_vertex)
 function expand(real_vertex) {
-    // Удаляем все появления vertex в bottom_layer, кроме первого
+    // Ищем первое появление real_vertex и заменяем его
     // Первое появление превращается в P-node и к нему подкрепляются вируальные дети REAL_GRAPH_CHILDS[vertex]
 
-    let first_mention = 1;
-    let new_bottom_layer = [];
-    for(let u of bottom_layer) {
-        if( PQvertex_type[u] != N + real_vertex ) { new_bottom_layer.push(u); continue; }
+    let first_mention = 0;
+    while( PQvertex_type[bottom_layer[first_mention]] != real_vertex ) first_mention++;
 
-        if( !first_mention ) {
-            // удаляем из детей
-            let prv = PQprev[u];
-            PQchilds[prv].splice(PQchilds[prv].indexOf(u), 1);
-            // new_bottom_layer.push(u); 
-            continue;
-        }
-        first_mention = 0;
-
-        // PQvertex_type[u] -= N;  // сделали P-node
-        PQvertex_type[u] = (Math.random() < -0.5 ? -1 : PQvertex_type[u]-N);
-        for(let chld of REAL_GRAPH_CHILDS[real_vertex]) PQchilds[u].push( newPQnode(N + chld, u) );
-        new_bottom_layer.push(...PQchilds[u]);
+    let pq_vertex = bottom_layer[first_mention];
+    for(let chld of REAL_GRAPH_CHILDS[real_vertex]) {
+        PQchilds[pq_vertex].push( newPQnode(N + chld, pq_vertex) );
     }
+    
+    let new_bottom_layer = bottom_layer.slice(0, first_mention);
+    new_bottom_layer.push(...PQchilds[pq_vertex]);
+    new_bottom_layer.push(...bottom_layer.slice(first_mention+1));
     bottom_layer = new_bottom_layer;
+
+    console.log(' -> new bottom layer: ', bottom_layer);
 }
 
 
@@ -457,22 +412,28 @@ function expand(real_vertex) {
 // ================================================================================================
 // [ ПОДСЧЁТ ВСЕХ КООРДИНАТ ]
 
+let COLLECTED_VERTEX = 0;  // соответсвтуящая её виртуальная вершина: COLLECTED_VERTEX+N
+
+let cnt_pertinent_leafs = 0;
+let pos_one_of_pertinent_leafs = 0;  // <- нужно только для случая с одной виртуальной вершиной
+
 let pertinent_vertex_order = [];
 let pertinent_root = -1;
 
-let one_of_virtual_vertex_id = -1;
-
 let SILLY_SHIFT_X  =  50;
 let AvailableWidth = 700;
-function recalc_coords() {
-    pertinent_vertex_order = [];
-    pertinent_root         = -1;
-    let min_pertinent_i1 = PQvertex_type.length, max_pertinent_i2 = -1;
+function recalc_coords(extra_calc = 0) {
+    if( extra_calc ) {
+        pertinent_vertex_order = [];
+        pertinent_root         = -1;
+    }
 
-    one_of_virtual_vertex_id = -1;
+    let min_pertinent_i1 = PQvertex_type.length, max_pertinent_i2 = -1;
     
-    pertinent_reducing_pos    = 0;
-    highlighted_up_edges_from = new Map();
+    if( extra_calc ) {
+        pertinent_reducing_pos    = 0;
+        highlighted_up_edges_from = new Map();
+    }
 
     // 0. СБРАСЫВАЕМ ОГРАНИЧИВАЮЩИЕ ПРЯМОУГОЛЬНИКИ
     for(let i = 0; i < PQvertex_type.length; i++) {
@@ -482,14 +443,17 @@ function recalc_coords() {
         PQdraw[i].i1 = bottom_layer.length;
         PQdraw[i].i2 = -1;
 
-        is_pertinent_node   [i] = 0;
-        pertinent_tree_info[i].is_full        = 0;
-        pertinent_tree_info[i].is_left_fulled = 0;
+        if( extra_calc ) {
+            is_pertinent_node  [i] = 0;
+            pertinent_tree_info[i].is_full        = 0;
+            pertinent_tree_info[i].is_left_fulled = 0;
+        }
     }
 
     // 1. ПОДСЧЁТ ДЛЯ ЛИСТЬЕВ
     //    ТУТ МОЖНО РАЗНЫМИ ВАРИАНТАМИ -> сделать бы это переключаемым
     //    СЕЙЧАС: вписываем прям в края (в данном варианте растановки есть частный случай когда только одна вершина)
+    if( extra_calc ) cnt_pertinent_leafs = 0;
     let l = bottom_layer.length;
     let [shift, space] = (l == 1) ? [AvailableWidth/2, 0] : [0, AvailableWidth/(l-1)];
     for(let i = 0; i < l; i++) {
@@ -500,7 +464,9 @@ function recalc_coords() {
         PQdraw[v].i1 = PQdraw[v].i2 = i;
 
         // pertinent виртуальная вершина
-        if( PQvertex_type[v]-N == vertex_to_expand ) {
+        if( extra_calc && PQvertex_type[v]-N == COLLECTED_VERTEX ) {
+            pos_one_of_pertinent_leafs = i;
+            cnt_pertinent_leafs++; 
             one_of_virtual_vertex_id = v;
 
             is_pertinent_node  [v] = 1;
@@ -535,14 +501,14 @@ function recalc_coords() {
             PQdraw[p].i1 = Math.min(PQdraw[p].i1, PQdraw[v].i1);
             PQdraw[p].i2 = Math.max(PQdraw[p].i2, PQdraw[v].i2);
 
-            is_pertinent_node[p] = Math.max(is_pertinent_node[p], is_pertinent_node[v]);
+            if(extra_calc) is_pertinent_node[p] = Math.max(is_pertinent_node[p], is_pertinent_node[v]);
             
             if( calls[p] != PQchilds[p].length ) continue; 
             
             // все дети вершины p обработанны -> ДОБАВЛЯЕМ В next_layer
             next_layer.push(p);
 
-            if( is_pertinent_node[p] && pertinent_root == -1 ) {  // если pertinent_tree ещё не законченно
+            if( extra_calc && is_pertinent_node[p] && pertinent_root == -1 ) {  // если pertinent_tree ещё не законченно
                 pertinent_vertex_order.push(p);
 
                 // проверка может мы дошли до корня?
@@ -562,11 +528,13 @@ function recalc_coords() {
     }
 
     // рисуем pertinent tree
-    console.log('от vertex_to_expand=', pertinent_vertex_order, ' pertinent_vertex_order: ', pertinent_vertex_order);
-    
-    console.log('КОРЕННЬ pertinent tree: ', pertinent_root);
-    for(let prt of pertinent_vertex_order) draw_box(prt, ctx, COLORS.ORANGE);
-    if( pertinent_root != -1 ) draw_box(pertinent_root, ctx, COLORS.ORANGE, 'pertinent дерево');
+    if( extra_calc ) {
+        console.log('Порядок просмотра pertinent вершин: ', pertinent_vertex_order);
+        
+        console.log('КОРЕНЬ pertinent tree: ', pertinent_root);
+        for(let prt of pertinent_vertex_order) draw_box(prt, ctx, COLORS.ORANGE);
+        if( pertinent_root != -1 ) draw_box(pertinent_root, ctx, COLORS.ORANGE, 'pertinent дерево');
+    }
 }
 
 
@@ -576,7 +544,7 @@ function recalc_coords() {
 function draw_subtree(cur, excepted_branch = -1, draw_ctx = ctx) {
     if( cur == excepted_branch ) return;
 
-    if(PQchilds[cur].length) console.log(cur, ' : ', PQchilds[cur], ' (childs)');
+    if(PQchilds[cur].length) console.log(cur, ' : ', PQchilds[cur], ' (childs)  [x1,x2]:', PQdraw[cur].x1, PQdraw[cur].x2);
 
     for(let nxt of PQchilds[cur]) {
         if( nxt == excepted_branch ) continue;  // ай, сам знаю кринж - два сравнения с excepted_branch, но чет неочев как делать из-за рисования ребра
@@ -585,6 +553,11 @@ function draw_subtree(cur, excepted_branch = -1, draw_ctx = ctx) {
     }
 
     draw_vertex_label(cur, draw_ctx);
+}
+
+function redraw_tree() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    draw_subtree(EXPAND_ORDER[0]);
 }
 
 // function draw_box() {}
@@ -1048,12 +1021,6 @@ function animate_permutation(i, new_pos_in_childs) {
 
 // }
 
-// собираем вершины vertex_to_expand
-
-
-let pos_in_booked = 0;
-let booked_order_reducing_move = [];  // [type, args..] - тупо в виде массива
-
 
 let pertinent_reducing_pos = -1;
 
@@ -1063,75 +1030,13 @@ let lft_first_pertinent_child = 0, rht_first_pertinent_child = 0;
 
 
 // ?!! У нас обязательно потомки должны быть LEFT_FULLED !!!  -  можно через поддержание этого сделать
+// ДЛЯ СОЗДАНИЯ АИМАЦИИ
 function reducing_step() {
-    if( !is_input_data_readed ) {
-        console.log('НЕТ ДАННЫХ');
-        console.log('  => запускаем next_vertex_expand()');
-        next_vertex_expand();
-
-        pos_in_booked              =  0;
-        booked_order_reducing_move = [];
-        return;
-    }
-
-    // выполняем забронированные шаги (ппхпхп, аля нынче часто поподающееся у меня в рекомендациях: технический долг)
-    if( pos_in_booked < booked_order_reducing_move.length ) {
-        console.log("BOOKED: ", booked_order_reducing_move);
-
-        let type   = booked_order_reducing_move[pos_in_booked][0];
-        let vertex = booked_order_reducing_move[pos_in_booked][1];
-        
-        //  type == 0  -  значит разворот
-        if( type == 0 ) animate_rotation(vertex);
-        else {
-            let new_pos = booked_order_reducing_move[pos_in_booked][2];
-            
-            // иначе не надо переставлять!
-            let pos_in_childs = 0, parent = PQprev[vertex];
-            while( PQchilds[parent][pos_in_childs] != vertex ) pos_in_childs++;
-            if( pos_in_childs == new_pos ) {
-                // АХАХАХАХАХХААХХАХА ВАПХПААХПАХПХ
-                pos_in_booked++;
-                console.log('АДСКИЙ АД');
-                reducing_step();  // <- ПОМОЕМУ ЭТО АД АДСКИЙ, АПХАХАХАХА, ВА-ха-ха
-                return;
-            }
-
-            console.log('[booking]: move vertex [', vertex, '] to pos in parent: ', new_pos);
-            animate_permutation(vertex, new_pos);
-        }
-
-        console.log('!!!! AFTER REDUCTION:\nbottom_layer: ', bottom_layer);
-        pos_in_booked++;
-        return;
-    }
-
-    
-    // НАКОНЕЦ ПЕРЕХОДИМ К ОБРАБОТКЕ pertinent subtree
-    pos_in_booked              =  0;
-    booked_order_reducing_move = [];
-
-
-
-    if( pertinent_reducing_pos >= pertinent_vertex_order.length ) {
-        console.log('ЗАКОЧИЛИСЬ reducing ШАГИ');
-        console.log('  => запускаем next_vertex_expand()');
-        next_vertex_expand();
-        return;
-    }
-
     let curr_vertex = pertinent_vertex_order[pertinent_reducing_pos++];
-    console.log('РАССМАТРИВАЕМАЯ pertinent curr_vertex: ', curr_vertex);
-
-
-    
-    // pertinent_tree_info[i].is_full        = 0;
-    // pertinent_tree_info[i].is_left_fulled = 0;
+    console.log('РАССМАТРИВАЕМ [', curr_vertex, '] (для cоздания анимации)');
     
     let is_full = 1;
     let pertinent_childs = [];  // хранятся именно номера "PQtree[i]"
-
-    let is_occured_blank_childs = 0;
 
     // выделяем (highlighting) нужные рёбра
     for(let nxt of PQchilds[curr_vertex]) {
@@ -1148,8 +1053,7 @@ function reducing_step() {
     }
 
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    draw_subtree(0);
+    redraw_tree();
     draw_box(curr_vertex, ctx, COLORS.PURPLE, 'рассматриваемое pertinent поддерево');
 
 
@@ -1340,10 +1244,152 @@ function reducing_step() {
 
 
 // ================================================================================================
+// чет не круто дебажить функцию, придется логику разделять
+
+let pos_in_booked = 0;
+let booked_order_reducing_move = [];  // [type, args..] - тупо в виде массива
+
+let vertex_to_bind_reduce = -1;
+
+
+// let pertinent_vertex_order = [];
+// let pertinent_root = -1;
+
+let button_condition = 0;
+function button_press() {
+    console.log('\n------------ [ BUTTON PRESS ] ------------');
+
+    if( !is_input_data_readed ) {
+        console.log('НЕТ ДАННЫХ');
+        console.log('  => читаем tree_read()');
+        tree_read();
+        
+        // ИНИЦИАЛИЗАЦИЯ PQ-дерева
+        newPQnode(EXPAND_ORDER[0], -1);
+        bottom_layer = [ EXPAND_ORDER[0] ];
+        
+        
+        recalc_coords();
+        redraw_tree();
+
+        button_condition = 0;
+        return;
+    }
+
+    if( button_condition == 0 ) {  // РАСПИСЫВАЕМ ДЕТЕЙ ВИРТУАЛЬНОЙ ВЕРШИНЫ
+        if( EXPAND_ORDER_POS  >= N ) return;
+        COLLECTED_VERTEX = EXPAND_ORDER[EXPAND_ORDER_POS++];
+
+        console.log('РАСПИСЫВАЕМ ДЕТЕЙ "виртуальной" ВЕРШИНЫ [', COLLECTED_VERTEX, ']');
+        expand(COLLECTED_VERTEX);
+
+        COLLECTED_VERTEX = EXPAND_ORDER[EXPAND_ORDER_POS];
+
+        recalc_coords(1);
+        redraw_tree();
+
+        button_condition = 1;
+        return;
+    }
+
+
+    // НАЧИЛИ собирать в новом pretinent tree
+    if( button_condition == 1 ) {  // обработка следующей вершины из очереди pertinent subtrees
+        vertex_to_bind_reduce = pertinent_vertex_order[pertinent_reducing_pos];
+        console.log('ПРИСТУПАЕМ К ПОДДЕРЕВУ НА ВЕРШИНЕ [', vertex_to_bind_reduce, ']');
+        pos_in_booked              =  0;
+        booked_order_reducing_move = [];
+        reducing_step();
+        button_condition = 2;
+        return;
+    }
+
+
+    // АНИМАЦИИ сборки (вращения / перестановки)
+    if( button_condition == 2 && pos_in_booked >= booked_order_reducing_move.length ) {
+        console.log('АНИМАЦИИ ДЛЯ ПОДДЕРЕВА НА ВЕРШИНЕ [', vertex_to_bind_reduce,'] ЗАКОНЧИЛИСЬ');
+        button_condition = 3;
+    }
+    if( button_condition == 2 ) {  // анимации вершины
+        console.log("BOOKED: ", booked_order_reducing_move);
+
+        let type   = booked_order_reducing_move[pos_in_booked][0];
+        let vertex = booked_order_reducing_move[pos_in_booked][1];
+        
+        //  type == 0  -  значит разворот
+        if( type == 0 ) animate_rotation(vertex);
+        else {
+            let new_pos = booked_order_reducing_move[pos_in_booked][2];
+            
+            // иначе не надо переставлять!
+            let pos_in_childs = 0, parent = PQprev[vertex];
+            while( PQchilds[parent][pos_in_childs] != vertex ) pos_in_childs++;
+            if( pos_in_childs == new_pos ) {
+                // АХАХАХАХАХХААХХАХА ВАПХПААХПАХПХ
+                pos_in_booked++;
+                console.log('АДСКИЙ АД');
+                button_press();  // <- ПОМОЕМУ ЭТО АД АДСКИЙ, АПХАХАХАХА, ВА-ха-ха - а вроде сейчас кажется вообще норм
+                return;
+            }
+
+            console.log('[booking]: move vertex [', vertex, '] to pos in parent: ', new_pos);
+            animate_permutation(vertex, new_pos);
+        }
+
+        console.log('!!!! AFTER REDUCTION:\nbottom_layer: ', bottom_layer);
+        pos_in_booked++;
+        return;
+    }
+
+
+    if( button_condition == 3 && vertex_to_bind_reduce == pertinent_root ) {
+        button_condition = 4;
+    }
+    if( button_condition == 3 ) {  // редуцируем корень pertinent tree
+        console.log('ПРИВОДИМ ЭТО ПОДДЕРЕВО, ЧТОБЫ наверху было Q-node');
+        bind_reduce(vertex_to_bind_reduce);
+        recalc_coords();
+        button_condition = 1;
+    }
+
+
+    if( button_condition == 4 && cnt_pertinent_leafs == 1 ) {
+        console.log('ЭТО КОРЕНЬ ВСЕГО pertinent tree! НО у нас всего один виртуальный лист -> ничего не делаем');
+        PQvertex_type[bottom_layer[pos_one_of_pertinent_leafs]] -= N;  // превращаем в реальную
+        button_condition = 0;
+        button_press();
+    }
+    if( button_condition == 4 ) {
+        console.log('ЭТО КОРЕНЬ ВСЕГО pertinent tree! -> выделяем pertinent tree в отдельную Q-node');
+        root_bind_reduce();
+        let save_root = pertinent_root;
+        recalc_coords();
+        redraw_tree();
+        draw_box(pertinent_root, ctx, COLORS.BROWN, "корень pertinent tree");
+        button_condition = 5;
+    }
+
+
+    if( button_condition == 5 ) {
+        console.log('ЭТО КОРЕНЬ ВСЕГО pertinent tree! -> выделяем pertinent tree в отдельную Q-node');
+        pruning();
+        button_condition = 0
+    }
+
+
+}
+
+function pruning() {
+
+}
+
+
+// ================================================================================================
 // удаление pertinent вершин
 
 // t == 0 - значит pertinent вершины справа, иначе слева
 function recurse_deleting(i, t = 0) {
+    console.log('recurse del: [', i, ']');
     let l = PQchilds[i].length, to_del = 0, pos = 0;
     if( t == 0 ) {
         pos = l-1;
@@ -1354,61 +1400,68 @@ function recurse_deleting(i, t = 0) {
     }
 
     let is_exist_lefted = to_del != l ? pertinent_tree_info[PQchilds[i][pos]].is_left_fulled : 0;
-    PQchilds[i].splice(t ? 0 : pos, to_del);  // удаляем промежуток fulled вершин
+    PQchilds[i].splice(t ? 0 : pos+1, to_del);  // удаляем промежуток fulled вершин
+    console.log(`УДАЛЯМ [${t ? 0 : pos+1}, ${(t ? 0 : pos+1)+to_del}) промежуток из детей [${i}] - > `, PQchilds[i]);
     if( is_exist_lefted ) recurse_deleting(t == 0 ? PQchilds[i].length-1 : 0, t);
 }
 
 // что есди одна вершина? -> просто не вызывать pruning()!
-function pruning() {
+// ЭТА ФУНЦИЯ МЕНЯЕТ ТОЛЬКО ТОПОЛОГИЮ, НО НЕ КООРДИНАТЫ
+function root_bind_reduce() {
     // собираем все вершины в pertinent root
+    console.log('!!!!!!!!!!!!!!!!!root_bind_reduce: ', PQchilds[pertinent_root]);
 
-    let lft_blank = PQvertex_type[pertinent_root].slice(0, lft_first_pertinent_child);
-    let rht_blank = PQvertex_type[pertinent_root].slice(rht_first_pertinent_child+1, PQvertex_type[pertinent_root].length);
+    let lft_blank = PQchilds[pertinent_root].slice(0, lft_first_pertinent_child);
+    let rht_blank = PQchilds[pertinent_root].slice(rht_first_pertinent_child+1, PQchilds[pertinent_root].length);
 
-    let is_lft_not_full = !pertinent_tree_info[PQchilds[curr_vertex][lft_first_pertinent_child]].is_full;
-    let is_rht_not_full = !pertinent_tree_info[PQchilds[curr_vertex][rht_first_pertinent_child]].is_full;
+    let is_lft_not_full = !pertinent_tree_info[PQchilds[pertinent_root][lft_first_pertinent_child]].is_full;
+    let is_rht_not_full = !pertinent_tree_info[PQchilds[pertinent_root][rht_first_pertinent_child]].is_full;
     
-    let lft_partial = is_lft_not_full && lft_first_pertinent_child != rht_first_pertinent_child ? [lft_first_pertinent_child] : [];
-    let rht_partial = is_rht_not_full ? [rht_first_pertinent_child] : [];
+    let lft_partial = is_lft_not_full && lft_first_pertinent_child != rht_first_pertinent_child ? [PQchilds[pertinent_root][lft_first_pertinent_child]] : [];
+    let rht_partial = is_rht_not_full ? [PQchilds[pertinent_root][rht_first_pertinent_child]] : [];
 
-    if( is_lft_not_full ) recurse_deleting(lft_first_pertinent_child, 0);
-    if( is_rht_not_full ) recurse_deleting(rht_first_pertinent_child, 1);
+    if( is_lft_not_full ) recurse_deleting(PQchilds[pertinent_root][lft_first_pertinent_child], 0);
+    if( is_rht_not_full ) recurse_deleting(PQchilds[pertinent_root][rht_first_pertinent_child], 1);
+
 
     // удаляем [/( lft_first_pertinent_child , rht_first_pertinent_child ]/)
-    let pre_root = pertinent_root;
+    let virtual_end_vertex;
     if( PQvertex_type[pertinent_root] >= 0 ) {  // это P-node
         // надо создать новую Q-node
-        pre_root = newPQnode(-1, pertinent_root, [...lft_partial, one_of_virtual_vertex_id, ...rht_partial]);
+        let pre_root = newPQnode(-1, pertinent_root);
+        
+        // создаём новую виртуальную вершину
+        virtual_end_vertex = newPQnode(COLLECTED_VERTEX, pre_root);
+        
+        PQchilds[pre_root] = [...lft_partial, virtual_end_vertex, ...rht_partial];
+
         PQchilds[pertinent_root] = [...lft_blank, pre_root, ...rht_blank];
+        console.log('>>>> new childs [', pertinent_root, ']: ', PQchilds[pertinent_root]);
+        
+        for(let e of PQchilds[pre_root]) {
+            PQprev[e] = pre_root;
+            recurse_shift(e, 0, +dY);
+        }
+        
     } else {
-        PQchilds[pertinent_root] = [...lft_part, ...lft_partial, one_of_virtual_vertex_id, ...rht_partial, ...rht_part];
+        // создаём новую виртуальную вершину
+        virtual_end_vertex = newPQnode(COLLECTED_VERTEX, pertinent_root);
+
+        // вливаем вершины
+        PQchilds[pertinent_root] = [...lft_blank, ...lft_partial, virtual_end_vertex, ...rht_partial, ...rht_blank];
     }
 
-
-    let lft_border = lft_first_pertinent_child + is_lft_not_full;
-    let rht_border = rht_first_pertinent_child - is_rht_not_full;
-
-    if( lft_border > rht_border + 1 ) {  // по идеи в алгоритме не должно возникнуть этого случая, но я уже всё ифаю..
-        lft_border = rht_border + 1;
+    // изменяем bottom_layer
+    let new_bottom_layer = [], need_first_push = 1;
+    for(let e of bottom_layer) {
+        if( PQvertex_type[e] != N+COLLECTED_VERTEX ) new_bottom_layer.push(e);
+        else {
+            if( need_first_push ) new_bottom_layer.push(virtual_end_vertex);
+            need_first_push = 0;
+        }
     }
-
-
-    // .slice(a, b) - всключается все элементы, чьи идексы удовлетворяют a <= i < b (если b <= a, то получается вернется [])
-    let lft_part = slice(0, lft_border);
-    let rht_part = rht_border < 0 ? [] : slice(rht_border + 1, PQchilds[pertinent_root].length);  // как же подебильному slice сделан, кому нужны в нём отрицательные индексы (хотя в моём примере с -1 это ещё будет работать, но если вдруг станет -2 то всё приехали (хотя у меня по идеи не должно -2 никак возникать, но всё равно бесит такое))
-         
-
-    
- 
-
-    // должны изменить предка у вершины one_of_virtual_vertex_id (PQprev, PQvertex_type)
-    PQprev[one_of_virtual_vertex_id] = prev_root;
-
-
-    // удаление всех pertinent full_
-
-
-    // удаление всех вершин с одним ребёнком (СДЕЛАТЬ ОТДЕЛЬНЫМ ШАГОМ)
+    bottom_layer = new_bottom_layer;
+    console.log('>>> new bottom layer: ', new_bottom_layer);
 }
 
 
@@ -1416,27 +1469,43 @@ function bind_reduce(vertex) {
     let first_blank = 0;
     while( first_blank < PQchilds[vertex].length && is_pertinent_node[PQchilds[vertex][first_blank]] ) first_blank++;
     
+    console.log('[BIND]: old childs:', PQchilds[vertex]);
+
     if( PQvertex_type[vertex] != -1 ) {  // P-node -> делаем доп шаг (сделать бы его по кнопке)
+        console.log('[BIND]: its P-node');
+
         let cnt_blank = PQchilds[vertex].length - first_blank;
         if( cnt_blank > 1 ) {  // должны создать P-node потомка
             let blank_childs = PQchilds[vertex].slice(first_blank);
             
             let new_node = newPQnode(PQvertex_type[vertex], vertex, blank_childs);
+            let summ = 0;
             for(let e of blank_childs) {
+                summ += PQdraw[e].x;
                 PQprev[e] = new_node;
-                recurse_shift(new_node, 0, +dY);
+                recurse_shift(e, 0, +dY);
+                PQdraw[new_node].h = Math.max(PQdraw[new_node].h, PQdraw[e].h + 1);
             }
 
+            // ПОФИГ НА ПРИНЦИПЫ КОДА (сейчас)
+            // А. ЦЕНТР МАСС ЛИСТЬЕВ
+            // Б. СРЕДНЕЕ ОТ СВОИХ ДЕТЕЙ
+
+            PQdraw[new_node].x  = summ / blank_childs.length;
             PQdraw[new_node].x1 = PQchilds[blank_childs[0]].x1;
             PQdraw[new_node].x2 = PQchilds[blank_childs[blank_childs.length-1]].x2;
             
             PQchilds[vertex] = PQchilds[vertex].slice(0, first_blank);
             PQchilds[vertex].push(new_node);
+            PQdraw[vertex].h = Math.max(PQdraw[vertex].h, PQdraw[new_node].h + 1);
         }
+        
+        console.log('[BIND]: mid childs:', PQchilds[vertex]);
 
         // "переименовываем" вершину (на Q-node)
         PQvertex_type[vertex] = -1;
     }
+
 
     // вливаем pertinent потомков
     let pump_childs = [];
@@ -1456,53 +1525,12 @@ function bind_reduce(vertex) {
     }
     let blank_childs = PQchilds[vertex].slice(first_blank);
     PQchilds[vertex] = [...pump_childs, ...blank_childs];
+    console.log('[BIND]: new childs:', PQchilds[vertex]);
 }
+
 
 // ================================================================================================
 // КНОПКА [next]
-
-let to_delete_flag = 0;
-
-let vertex_to_expand = 0;
-function next_vertex_expand() {
-    if( !is_input_data_readed ) {
-        tree_read();
-        return;
-    }
-
-    if( vertex_to_expand >= N ) return;
-
-    // press_button_expand();
-    expand(vertex_to_expand);
-    vertex_to_expand++;
-
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    recalc_coords();
-    draw_subtree(0);
-    
-    // for(let i = 0; i < 100; i++) highlighted_up_edges_from.set(i, 1);
-    // highlighted_up_edges_from.set(1, 1);
-    // highlighted_up_edges_from.set(5, 1);
-
-    let bl = [...bottom_layer];
-    for(let i in bl) bl[i] = PQvertex_type[bl[i]] - N;
-    console.log('AFTER EXPAND: ', vertex_to_expand, '  |  bottom_layer: ', bottom_layer, '  |  bl: ', bl);
-
-
-
-
-    // if( vertex_to_expand >= 1 ) {
-    //     if(to_delete_flag) animate_rotation(1);
-    //     else if( vertex_to_expand >= 5 )  animate_permutation(5, 4);
-    //     to_delete_flag ^= 1;
-    //     // animate_permutation(5, 3);
-    // }
-
-}
-
-
-
 
 
 // ================================================================================================
